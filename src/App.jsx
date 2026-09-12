@@ -83,16 +83,16 @@ function App() {
   // =========================
   const [ventas, setVentas] = useState([
     {
-      id: 1,
-      fecha: "06/09/2026",
-      producto: "Arroz Faraón",
-      cantidad: 5,
-      tipo: "Minorista",
-      pago: "Yape",
-      total: 22.5,
+      id: "VT-003",
+      fecha: "05/09/2026",
+      producto: "Fideos",
+      cantidad: 10,
+      tipo: "Mayorista",
+      pago: "Plin",
+      total: 31.5,
     },
     {
-      id: 2,
+      id: "VT-002",
       fecha: "06/09/2026",
       producto: "Leche",
       cantidad: 3,
@@ -101,13 +101,13 @@ function App() {
       total: 12.0,
     },
     {
-      id: 3,
-      fecha: "05/09/2026",
-      producto: "Fideos",
-      cantidad: 10,
-      tipo: "Mayorista",
-      pago: "Plin",
-      total: 31.5,
+      id: "VT-001",
+      fecha: "06/09/2026",
+      producto: "Arroz Faraón",
+      cantidad: 5,
+      tipo: "Minorista",
+      pago: "Yape",
+      total: 22.5,
     },
   ]);
 
@@ -119,6 +119,9 @@ function App() {
     tipo: "Minorista",
     pago: "Efectivo",
   });
+  const [busquedaProductoVenta, setBusquedaProductoVenta] = useState("");
+  const [carritoVenta, setCarritoVenta] = useState([]);
+  const [ventaSeleccionada, setVentaSeleccionada] = useState(null);
 
   // =========================
   // COMPRAS
@@ -305,17 +308,30 @@ if (Number(nuevoProducto.precio) <= 0) {
     producto.nombre.toLowerCase().includes(busqueda.toLowerCase())
   );
 
-  // =========================
-  // VENTAS - REGISTRAR
-  // =========================
-  const registrarVenta = (e) => {
-    e.preventDefault();
+  const productosVentaFiltrados = productos.filter((producto) =>
+    producto.nombre
+      .toLowerCase()
+      .includes(busquedaProductoVenta.toLowerCase())
+  );
 
+  const productoSeleccionadoVenta = productos.find(
+    (producto) => producto.id === Number(nuevaVenta.productoId)
+  );
+  const factorPrecioVenta = nuevaVenta.tipo === "Mayorista" ? 0.95 : 1;
+  const totalCarritoVenta = carritoVenta.reduce(
+    (total, item) =>
+      total + item.precio * factorPrecioVenta * item.cantidad,
+    0
+  );
+
+  const agregarProductoVenta = () => {
     const producto = productos.find(
       (p) => p.id === Number(nuevaVenta.productoId)
     );
-
     const cantidad = Number(nuevaVenta.cantidad);
+    const productoEnCarrito = carritoVenta.find(
+      (item) => item.id === producto?.id
+    );
 
     if (!producto) {
       alert("Selecciona un producto.");
@@ -327,25 +343,114 @@ if (Number(nuevoProducto.precio) <= 0) {
       return;
     }
 
-    if (cantidad > producto.cantidad) {
+    if (
+      productoEnCarrito &&
+      productoEnCarrito.cantidad + cantidad > producto.cantidad
+    ) {
+      alert("No hay suficiente stock disponible para agregar esa cantidad.");
+      return;
+    }
+
+    if (!productoEnCarrito && cantidad > producto.cantidad) {
       alert("No hay suficiente stock disponible.");
       return;
     }
 
-    let precio = producto.precio;
+    setCarritoVenta(
+      productoEnCarrito
+        ? carritoVenta.map((item) =>
+            item.id === producto.id
+              ? { ...item, cantidad: item.cantidad + cantidad }
+              : item
+          )
+        : [
+            ...carritoVenta,
+            {
+              id: producto.id,
+              nombre: producto.nombre,
+              cantidad,
+              precio: producto.precio,
+            },
+          ]
+    );
+    setNuevaVenta({
+      ...nuevaVenta,
+      productoId: "",
+      cantidad: 1,
+    });
+    setBusquedaProductoVenta("");
+  };
 
-    // Descuento simulado para venta mayorista
-    if (nuevaVenta.tipo === "Mayorista") {
-      precio = precio * 0.95;
+  const cambiarCantidadProductoVenta = (productoId, cambio) => {
+    setCarritoVenta(
+      carritoVenta
+        .map((item) =>
+          item.id === productoId
+            ? { ...item, cantidad: item.cantidad + cambio }
+            : item
+        )
+        .filter((item) => item.cantidad > 0)
+    );
+  };
+
+  const obtenerProductosVenta = (venta) =>
+    venta.productos || [
+      {
+        id: venta.id,
+        nombre: venta.producto,
+        cantidad: venta.cantidad,
+        precio: venta.total / venta.cantidad,
+      },
+    ];
+
+  // =========================
+  // VENTAS - REGISTRAR
+  // =========================
+  const registrarVenta = (e) => {
+    e.preventDefault();
+
+    if (carritoVenta.length === 0) {
+      alert("Agrega al menos un producto a la venta.");
+      return;
     }
 
-    const total = precio * cantidad;
+    const carritoValido = carritoVenta.every((item) => {
+      const producto = productos.find((p) => p.id === item.id);
+      return producto && item.cantidad > 0 && item.cantidad <= producto.cantidad;
+    });
+
+    if (!carritoValido) {
+      alert("Revisa las cantidades: no hay suficiente stock disponible.");
+      return;
+    }
+
+    const productosRegistrados = carritoVenta.map((item) => ({
+      ...item,
+      precio:
+        nuevaVenta.tipo === "Mayorista" ? item.precio * 0.95 : item.precio,
+    }));
+    const total = productosRegistrados.reduce(
+      (suma, item) => suma + item.precio * item.cantidad,
+      0
+    );
 
     const venta = {
-      id: Date.now(),
+      id: `VT-${String(
+        Math.max(
+          ...ventas.map((ventaRegistrada) =>
+            Number(String(ventaRegistrada.id).replace("VT-", ""))
+          ),
+          0
+        ) + 1
+      ).padStart(3, "0")}`,
       fecha: new Date().toLocaleDateString("es-PE"),
-      producto: producto.nombre,
-      cantidad: cantidad,
+      productos: productosRegistrados,
+      producto: productosRegistrados[0].nombre,
+      cantidad: productosRegistrados.reduce(
+        (suma, item) => suma + item.cantidad,
+        0
+      ),
+      cantidadProductos: productosRegistrados.length,
       tipo: nuevaVenta.tipo,
       pago: nuevaVenta.pago,
       total: total,
@@ -355,14 +460,12 @@ if (Number(nuevoProducto.precio) <= 0) {
 
     // Descontar stock
     setProductos(
-      productos.map((p) =>
-        p.id === producto.id
-          ? {
-              ...p,
-              cantidad: p.cantidad - cantidad,
-            }
-          : p
-      )
+      productos.map((producto) => {
+        const item = carritoVenta.find((linea) => linea.id === producto.id);
+        return item
+          ? { ...producto, cantidad: producto.cantidad - item.cantidad }
+          : producto;
+      })
     );
 
     setNuevaVenta({
@@ -371,6 +474,8 @@ if (Number(nuevoProducto.precio) <= 0) {
       tipo: "Minorista",
       pago: "Efectivo",
     });
+    setCarritoVenta([]);
+    setBusquedaProductoVenta("");
 
     setMostrarVenta(false);
   };
@@ -498,6 +603,12 @@ if (Number(nuevoProducto.precio) <= 0) {
 
     return resultado;
   }, {});
+
+  const cambiarSeccion = (nuevaSeccion) => {
+    setVentaSeleccionada(null);
+    setSeccion(nuevaSeccion);
+  };
+
   // =========================
   // CERRAR SESIÓN
   // =========================
@@ -574,7 +685,7 @@ if (Number(nuevoProducto.precio) <= 0) {
                 ? "menu-item active"
                 : "menu-item"
             }
-            onClick={() => setSeccion("inicio")}
+            onClick={() => cambiarSeccion("inicio")}
           >
             🏠 Dashboard
           </button>
@@ -585,7 +696,7 @@ if (Number(nuevoProducto.precio) <= 0) {
                 ? "menu-item active"
                 : "menu-item"
             }
-            onClick={() => setSeccion("inventario")}
+            onClick={() => cambiarSeccion("inventario")}
           >
             📦 Inventario
           </button>
@@ -596,7 +707,7 @@ if (Number(nuevoProducto.precio) <= 0) {
                 ? "menu-item active"
                 : "menu-item"
             }
-            onClick={() => setSeccion("ventas")}
+            onClick={() => cambiarSeccion("ventas")}
           >
             🛒 Ventas
           </button>
@@ -607,7 +718,7 @@ if (Number(nuevoProducto.precio) <= 0) {
                 ? "menu-item active"
                 : "menu-item"
             }
-            onClick={() => setSeccion("compras")}
+            onClick={() => cambiarSeccion("compras")}
           >
             🚚 Compras
           </button>
@@ -618,7 +729,7 @@ if (Number(nuevoProducto.precio) <= 0) {
                 ? "menu-item active"
                 : "menu-item"
             }
-            onClick={() => setSeccion("gastos")}
+            onClick={() => cambiarSeccion("gastos")}
           >
             💰 Gastos
           </button>
@@ -629,7 +740,7 @@ if (Number(nuevoProducto.precio) <= 0) {
                 ? "menu-item active"
                 : "menu-item"
             }
-            onClick={() => setSeccion("reportes")}
+            onClick={() => cambiarSeccion("reportes")}
           >
             📊 Reportes
           </button>
@@ -748,7 +859,7 @@ if (Number(nuevoProducto.precio) <= 0) {
                 {ventas.slice(0, 5).map((venta) => (
                   <div className="sale-row" key={venta.id}>
                     <span>
-                      Venta #{String(venta.id).slice(-3)} -{" "}
+                      Venta {venta.id} -{" "}
                       {venta.producto}
                     </span>
 
@@ -939,7 +1050,17 @@ if (Number(nuevoProducto.precio) <= 0) {
 
               <button
                 className="primary-button"
-                onClick={() => setMostrarVenta(true)}
+                onClick={() => {
+                  setBusquedaProductoVenta("");
+                  setCarritoVenta([]);
+                  setNuevaVenta({
+                    productoId: "",
+                    cantidad: 1,
+                    tipo: "Minorista",
+                    pago: "Efectivo",
+                  });
+                  setMostrarVenta(true);
+                }}
               >
                 + Nueva venta
               </button>
@@ -970,12 +1091,12 @@ if (Number(nuevoProducto.precio) <= 0) {
 
                   <thead>
                     <tr>
+                      <th>ID de venta</th>
                       <th>Fecha</th>
-                      <th>Producto</th>
-                      <th>Cantidad</th>
-                      <th>Tipo</th>
-                      <th>Pago</th>
+                      <th>Cantidad de productos</th>
+                      <th>Tipo de pago</th>
                       <th>Total</th>
+                      <th>Detalles</th>
                     </tr>
                   </thead>
 
@@ -983,25 +1104,24 @@ if (Number(nuevoProducto.precio) <= 0) {
 
                     {ventas.map((venta) => (
                       <tr key={venta.id}>
-
+                        <td>{venta.id}</td>
                         <td>{venta.fecha}</td>
-
                         <td>
-                          <strong>{venta.producto}</strong>
+                          {venta.cantidadProductos || obtenerProductosVenta(venta).length}
                         </td>
-
-                        <td>{venta.cantidad}</td>
-
-                        <td>{venta.tipo}</td>
-
                         <td>{venta.pago}</td>
-
                         <td>
-                          <strong>
-                            S/ {venta.total.toFixed(2)}
-                          </strong>
+                          <strong>S/ {venta.total.toFixed(2)}</strong>
                         </td>
-
+                        <td>
+                          <button
+                            type="button"
+                            className="details-button"
+                            onClick={() => setVentaSeleccionada(venta)}
+                          >
+                            <span aria-hidden="true">👁</span> Detalles
+                          </button>
+                        </td>
                       </tr>
                     ))}
 
@@ -1451,7 +1571,11 @@ if (Number(nuevoProducto.precio) <= 0) {
 
               <button
                 className="modal-close"
-                onClick={() => setMostrarVenta(false)}
+                onClick={() => {
+                  setMostrarVenta(false);
+                  setBusquedaProductoVenta("");
+                  setCarritoVenta([]);
+                }}
               >
                 ×
               </button>
@@ -1464,49 +1588,96 @@ if (Number(nuevoProducto.precio) <= 0) {
 
                 <label>Producto</label>
 
-                <select
-                  value={nuevaVenta.productoId}
-                  onChange={(e) =>
-                    setNuevaVenta({
-                      ...nuevaVenta,
-                      productoId: e.target.value,
-                    })
-                  }
-                >
+                <div className="product-autocomplete">
+                  <input
+                    type="text"
+                    placeholder="Escribe para buscar un producto"
+                    value={busquedaProductoVenta}
+                    onChange={(e) => {
+                      setBusquedaProductoVenta(e.target.value);
+                      setNuevaVenta({
+                        ...nuevaVenta,
+                        productoId: "",
+                      });
+                    }}
+                  />
 
-                  <option value="">
-                    Seleccionar producto
-                  </option>
-
-                  {productos.map((producto) => (
-                    <option
-                      key={producto.id}
-                      value={producto.id}
-                    >
-                      {producto.nombre} - Stock:{" "}
-                      {producto.cantidad}
-                    </option>
-                  ))}
-
-                </select>
+                  {busquedaProductoVenta.trim() && !productoSeleccionadoVenta && (
+                    <div className="product-suggestions">
+                      {productosVentaFiltrados.length > 0 ? (
+                        productosVentaFiltrados.map((producto) => (
+                          <button
+                            type="button"
+                            className="product-suggestion"
+                            key={producto.id}
+                            onClick={() => {
+                              setBusquedaProductoVenta(producto.nombre);
+                              setNuevaVenta({
+                                ...nuevaVenta,
+                                productoId: producto.id,
+                              });
+                            }}
+                          >
+                            <span>{producto.nombre}</span>
+                          </button>
+                        ))
+                      ) : (
+                        <p className="product-suggestions-empty">
+                          No se encontraron productos.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
 
               </div>
 
               <div className="form-group">
 
-                <label>Cantidad</label>
+                <div className="sale-quantity-row">
+                  <div>
+                    <label htmlFor="sale-quantity">Cantidad</label>
+                    <input
+                      id="sale-quantity"
+                      type="number"
+                      min="1"
+                      value={nuevaVenta.cantidad}
+                      onChange={(e) =>
+                        setNuevaVenta({
+                          ...nuevaVenta,
+                          cantidad: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
 
-                <input
-                  type="number"
-                  min="1"
-                  value={nuevaVenta.cantidad}
-                  onChange={(e) =>
-                    setNuevaVenta({
-                      ...nuevaVenta,
-                      cantidad: e.target.value,
-                    })
-                  }
-                />
+                  <div className="sale-unit-price">
+                    <div>
+                      <label>Precio unitario</label>
+                      <strong>
+                        {productoSeleccionadoVenta
+                          ? `S/ ${productoSeleccionadoVenta.precio.toFixed(2)}`
+                          : "-"}
+                      </strong>
+                    </div>
+                    <div>
+                      <label>Stock</label>
+                      <strong>
+                        {productoSeleccionadoVenta
+                          ? productoSeleccionadoVenta.cantidad
+                          : "-"}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="add-product-button"
+                  onClick={agregarProductoVenta}
+                >
+                  + Agregar producto
+                </button>
 
               </div>
 
@@ -1558,12 +1729,107 @@ if (Number(nuevoProducto.precio) <= 0) {
 
               </div>
 
+              <div className="form-group sale-products-group">
+
+                <label>Productos agregados</label>
+
+                {carritoVenta.length > 0 ? (
+                  <div className="sale-products-table-container">
+                    <table className="sale-products-table">
+                      <thead>
+                        <tr>
+                          <th>Producto</th>
+                          <th>Cantidad</th>
+                          <th>Subtotal</th>
+                          <th aria-label="Acciones"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {carritoVenta.map((item) => (
+                          <tr key={item.id}>
+                            <td>{item.nombre}</td>
+                            <td>
+                              <div className="quantity-controls">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    cambiarCantidadProductoVenta(item.id, -1)
+                                  }
+                                  aria-label={`Disminuir cantidad de ${item.nombre}`}
+                                >
+                                  -
+                                </button>
+                                <strong>{item.cantidad}</strong>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const producto = productos.find(
+                                      (p) => p.id === item.id
+                                    );
+                                    if (item.cantidad < producto.cantidad) {
+                                      cambiarCantidadProductoVenta(item.id, 1);
+                                    }
+                                  }}
+                                  aria-label={`Aumentar cantidad de ${item.nombre}`}
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </td>
+                            <td>
+                              S/ {(
+                                item.precio * factorPrecioVenta * item.cantidad
+                              ).toFixed(2)}
+                            </td>
+                            <td>
+                              <button
+                                type="button"
+                                className="remove-product-button"
+                                onClick={() =>
+                                  setCarritoVenta(
+                                    carritoVenta.filter(
+                                      (producto) => producto.id !== item.id
+                                    )
+                                  )
+                                }
+                                aria-label={`Eliminar ${item.nombre}`}
+                                title="Eliminar producto"
+                              >
+                                🗑️
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr>
+                          <td colSpan="2"></td>
+                          <td>
+                            <strong>S/ {totalCarritoVenta.toFixed(2)}</strong>
+                          </td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="sale-products-empty">
+                    Todavía no has agregado productos.
+                  </p>
+                )}
+
+              </div>
+
               <div className="modal-actions">
 
                 <button
                   type="button"
                   className="secondary-button"
-                  onClick={() => setMostrarVenta(false)}
+                  onClick={() => {
+                    setMostrarVenta(false);
+                    setBusquedaProductoVenta("");
+                    setCarritoVenta([]);
+                  }}
                 >
                   Cancelar
                 </button>
@@ -1581,6 +1847,57 @@ if (Number(nuevoProducto.precio) <= 0) {
 
           </div>
 
+        </div>
+      )}
+
+      {ventaSeleccionada && (
+        <div className="modal-overlay">
+          <div className="modal-card sale-details-modal">
+            <div className="modal-header">
+              <div>
+                <h2>Detalles de venta</h2>
+                <p>{ventaSeleccionada.id}</p>
+              </div>
+
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setVentaSeleccionada(null)}
+                aria-label="Cerrar detalles de venta"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="sale-details-table-container">
+              <table className="sale-details-table">
+                <thead>
+                  <tr>
+                    <th>ID de venta</th>
+                    <th>Producto</th>
+                    <th>Cantidad</th>
+                    <th>Precio unitario</th>
+                    <th>Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {obtenerProductosVenta(ventaSeleccionada).map((producto) => {
+                    const subtotal = producto.precio * producto.cantidad;
+
+                    return (
+                      <tr key={`${ventaSeleccionada.id}-${producto.id}`}>
+                        <td>{ventaSeleccionada.id}</td>
+                        <td>{producto.nombre}</td>
+                        <td>{producto.cantidad}</td>
+                        <td>S/ {producto.precio.toFixed(2)}</td>
+                        <td>S/ {subtotal.toFixed(2)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
