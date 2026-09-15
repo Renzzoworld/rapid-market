@@ -12,6 +12,10 @@ function App() {
   const [password, setPassword] = useState("");
   const [errorLogin, setErrorLogin] = useState("");
 
+  const [tipoReporte, setTipoReporte] = useState("ventas");
+  const [fechaDesde, setFechaDesde] = useState("");
+  const [fechaHasta, setFechaHasta] = useState("");
+
   // =========================
   // INVENTARIO
   // =========================
@@ -19,57 +23,90 @@ function App() {
     {
       id: 1,
       nombre: "Arroz Faraón",
-      cantidad: 25,
+      cantidad: 20,
       unidad: "kg",
-      precio: 4.5,
+      precio: 5.5,
+      precioCompra: 4.5,
+      precioVenta: 5.5,
+      perecible: true,
+      lotes: [],
     },
     {
       id: 2,
       nombre: "Azúcar rubia",
       cantidad: 8,
       unidad: "kg",
-      precio: 4.2,
+      precio: 5.2,
+      precioCompra: 4.2,
+      precioVenta: 5.2,
+      perecible: true,
+      lotes: [],
     },
     {
       id: 3,
       nombre: "Leche",
-      cantidad: 4,
+      cantidad: 22,
       unidad: "unidad",
-      precio: 4.0,
+      precio: 5.0,
+      precioCompra: 4.0,
+      precioVenta: 5.0,
+      perecible: true,
+      lotes: [],
     },
     {
       id: 4,
       nombre: "Bolsas de basura",
       cantidad: 2,
       unidad: "paquete",
-      precio: 8.0,
+      precio: 9.0,
+      precioCompra: 8.0,
+      precioVenta: 9.0,
+      perecible: false,
+      lotes: [],
     },
     {
       id: 5,
       nombre: "Papel higiénico",
       cantidad: 5,
       unidad: "paquete",
-      precio: 12.0,
+      precio: 13.0,
+      precioCompra: 12.0,
+      precioVenta: 13.0,
+      perecible: false,
+      lotes: [],
     },
     {
       id: 6,
       nombre: "Fideos",
-      cantidad: 20,
+      cantidad: 15,
       unidad: "paquete",
-      precio: 3.5,
+      precio: 4.5,
+      precioCompra: 3.5,
+      precioVenta: 4.5,
+      perecible: true,
+      lotes: [],
     },
     {
       id: 7,
       nombre: "Carbón",
       cantidad: 15,
       unidad: "kg",
-      precio: 5.0,
+      precio: 6.0,
+      precioCompra: 5.0,
+      precioVenta: 6.0,
+      perecible: false,
+      lotes: [],
     },
   ]);
 
   const [busqueda, setBusqueda] = useState("");
+  const [busquedaVentas, setBusquedaVentas] = useState("");
+  const [busquedaCompras, setBusquedaCompras] = useState("");
+  const [busquedaGastos, setBusquedaGastos] = useState("");
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [productoEditando, setProductoEditando] = useState(null);
+  const [productoInventarioSeleccionado, setProductoInventarioSeleccionado] =
+    useState(null);
 
   const [nuevoProducto, setNuevoProducto] = useState({
     nombre: "",
@@ -83,31 +120,40 @@ function App() {
   // =========================
   const [ventas, setVentas] = useState([
     {
-      id: "VT-003",
-      fecha: "05/09/2026",
+      idVenta: 4,
+      fecha: "11/09/2026",
+      producto: "Azúcar rubia",
+      cantidad: 17,
+      tipo: "Minorista",
+      pago: "Efectivo",
+      total: 88.4,
+    },
+    {
+      idVenta: 3,
+      fecha: "10/09/2026",
       producto: "Fideos",
       cantidad: 10,
       tipo: "Mayorista",
       pago: "Plin",
-      total: 31.5,
+      total: 42.75,
     },
     {
-      id: "VT-002",
-      fecha: "06/09/2026",
+      idVenta: 2,
+      fecha: "09/09/2026",
       producto: "Leche",
       cantidad: 3,
       tipo: "Minorista",
       pago: "Efectivo",
-      total: 12.0,
+      total: 15.0,
     },
     {
-      id: "VT-001",
-      fecha: "06/09/2026",
+      idVenta: 1,
+      fecha: "08/09/2026",
       producto: "Arroz Faraón",
       cantidad: 5,
       tipo: "Minorista",
       pago: "Yape",
-      total: 22.5,
+      total: 27.5,
     },
   ]);
 
@@ -128,31 +174,115 @@ function App() {
   // =========================
   const [compras, setCompras] = useState([
     {
-      id: 1,
-      fecha: "05/09/2026",
-      proveedor: "Proveedor de abarrotes",
-      producto: "Arroz Faraón",
-      cantidad: 20,
-      costo: 75.0,
+      idCompra: 4,
+      fecha: "07/09/2026",
+      proveedor: "Abarrotes Lima",
+      costo: 200.0,
+      estado: "Entregado",
+      lotes: [
+        {
+          idLote: 4,
+          fecha: "07/09/2026",
+          producto: "Bolsas de basura",
+          cantidad: 25,
+          cantidadInicial: 25,
+          cantidadActual: 2,
+          precioUnitario: 8.0,
+          precioCompraUnitario: 8.0,
+          subtotal: 200.0,
+          perecible: false,
+          fechaVencimiento: "",
+        },
+      ],
     },
     {
-      id: 2,
+      idCompra: 3,
+      fecha: "07/09/2026",
+      proveedor: "Abarrotes Lima",
+      costo: 105.0,
+      estado: "Entregado",
+      lotes: [
+        {
+          idLote: 3,
+          fecha: "07/09/2026",
+          producto: "Azúcar rubia",
+          cantidad: 25,
+          cantidadInicial: 25,
+          cantidadActual: 8,
+          precioUnitario: 4.2,
+          precioCompraUnitario: 4.2,
+          subtotal: 105.0,
+          perecible: true,
+          fechaVencimiento: "15/03/2027",
+        },
+      ],
+    },
+    {
+      idCompra: 2,
+      fecha: "05/09/2026",
+      proveedor: "Proveedor de abarrotes",
+      costo: 112.5,
+      estado: "Entregado",
+      lotes: [
+        {
+          idLote: 2,
+          fecha: "05/09/2026",
+          producto: "Arroz Faraón",
+          cantidad: 25,
+          cantidadInicial: 25,
+          cantidadActual: 20,
+          precioUnitario: 4.5,
+          precioCompraUnitario: 4.5,
+          subtotal: 112.5,
+          perecible: true,
+          fechaVencimiento: "05/03/2027",
+        },
+      ],
+    },
+    {
+      idCompra: 1,
       fecha: "04/09/2026",
       proveedor: "Distribuidora Lima",
-      producto: "Leche",
-      cantidad: 12,
-      costo: 42.0,
+      costo: 100.0,
+      estado: "Entregado",
+      lotes: [
+        {
+          idLote: 1,
+          fecha: "04/09/2026",
+          producto: "Leche",
+          cantidad: 25,
+          cantidadInicial: 25,
+          cantidadActual: 22,
+          precioUnitario: 4.0,
+          precioCompraUnitario: 4.0,
+          subtotal: 100.0,
+          perecible: true,
+          fechaVencimiento: "20/10/2026",
+        },
+      ],
     },
   ]);
 
   const [mostrarCompra, setMostrarCompra] = useState(false);
+  const [compraSeleccionada, setCompraSeleccionada] = useState(null);
+  const [compraVerificando, setCompraVerificando] = useState(null);
+  const [compraCancelando, setCompraCancelando] = useState(null);
+  const [fechasVencimiento, setFechasVencimiento] = useState({});
+  const proveedores = [
+    "Proveedor de abarrotes",
+    "Abarrotes Lima",
+    "Distribuidora Lima",
+  ];
 
   const [nuevaCompra, setNuevaCompra] = useState({
     proveedor: "",
     productoId: "",
     cantidad: 1,
-    costo: "",
+    precioUnitario: "",
   });
+  const [busquedaProveedorCompra, setBusquedaProveedorCompra] = useState("");
+  const [busquedaProductoCompra, setBusquedaProductoCompra] = useState("");
+  const [carritoCompra, setCarritoCompra] = useState([]);
 
   // =========================
   // GASTOS
@@ -204,9 +334,10 @@ function App() {
 
     setNuevoProducto({
       nombre: "",
-      cantidad: "",
+      cantidad: 0,
       unidad: "unidad",
       precio: "",
+      perecible: false,
     });
 
     setMostrarFormulario(true);
@@ -236,16 +367,11 @@ function App() {
 
     if (
       !nuevoProducto.nombre ||
-      nuevoProducto.cantidad === "" ||
       nuevoProducto.precio === ""
     ) {
       alert("Completa todos los campos.");
       return;
     }
-if (Number(nuevoProducto.cantidad) < 0) {
-  alert("La cantidad no puede ser negativa.");
-  return;
-}
 
 if (Number(nuevoProducto.precio) <= 0) {
   alert("El precio debe ser mayor que 0.");
@@ -261,6 +387,7 @@ if (Number(nuevoProducto.precio) <= 0) {
                 cantidad: Number(nuevoProducto.cantidad),
                 unidad: nuevoProducto.unidad,
                 precio: Number(nuevoProducto.precio),
+                precioVenta: Number(nuevoProducto.precio),
               }
             : producto
         )
@@ -272,6 +399,8 @@ if (Number(nuevoProducto.precio) <= 0) {
         cantidad: Number(nuevoProducto.cantidad),
         unidad: nuevoProducto.unidad,
         precio: Number(nuevoProducto.precio),
+        precioVenta: Number(nuevoProducto.precio),
+        perecible: false,
       };
 
       setProductos([...productos, nuevo]);
@@ -281,7 +410,7 @@ if (Number(nuevoProducto.precio) <= 0) {
 
     setNuevoProducto({
       nombre: "",
-      cantidad: "",
+      cantidad: 0,
       unidad: "unidad",
       precio: "",
     });
@@ -312,6 +441,23 @@ if (Number(nuevoProducto.precio) <= 0) {
     producto.nombre
       .toLowerCase()
       .includes(busquedaProductoVenta.toLowerCase())
+  );
+
+  const proveedoresFiltrados = proveedores.filter((proveedor) =>
+    proveedor.toLowerCase().includes(busquedaProveedorCompra.toLowerCase())
+  );
+
+  const productosCompraFiltrados = productos.filter((producto) =>
+    producto.nombre.toLowerCase().includes(busquedaProductoCompra.toLowerCase())
+  );
+
+  const productoSeleccionadoCompra = productos.find(
+    (producto) => producto.id === Number(nuevaCompra.productoId)
+  );
+
+  const totalCarritoCompra = carritoCompra.reduce(
+    (total, item) => total + item.precioUnitario * item.cantidad,
+    0
   );
 
   const productoSeleccionadoVenta = productos.find(
@@ -381,6 +527,52 @@ if (Number(nuevoProducto.precio) <= 0) {
     setBusquedaProductoVenta("");
   };
 
+  const agregarProductoCompra = () => {
+    const producto = productos.find(
+      (p) => p.id === Number(nuevaCompra.productoId)
+    );
+    const cantidad = Number(nuevaCompra.cantidad);
+    const precioUnitario = Number(nuevaCompra.precioUnitario);
+
+    if (!producto) {
+      alert("Selecciona un producto.");
+      return;
+    }
+
+    if (cantidad <= 0 || precioUnitario <= 0) {
+      alert("Cantidad y precio unitario deben ser mayores que 0.");
+      return;
+    }
+
+    setCarritoCompra([
+      ...carritoCompra,
+      {
+        id: producto.id,
+        nombre: producto.nombre,
+        cantidad,
+        precioUnitario,
+        perecible: producto.perecible,
+      },
+    ]);
+    setNuevaCompra({
+      ...nuevaCompra,
+      productoId: "",
+      cantidad: 1,
+      precioUnitario: "",
+    });
+    setBusquedaProductoCompra("");
+  };
+
+  const cambiarCantidadProductoCompra = (indice, cambio) => {
+    setCarritoCompra(
+      carritoCompra.map((item, itemIndex) =>
+        itemIndex === indice
+          ? { ...item, cantidad: Math.max(1, item.cantidad + cambio) }
+          : item
+      )
+    );
+  };
+
   const cambiarCantidadProductoVenta = (productoId, cambio) => {
     setCarritoVenta(
       carritoVenta
@@ -402,6 +594,127 @@ if (Number(nuevoProducto.precio) <= 0) {
         precio: venta.total / venta.cantidad,
       },
     ];
+
+  const obtenerCodigoCompra = (compra) =>
+    `CPA-${compra.idCompra ?? Number(String(compra.id).replace("CPA-", ""))}`;
+
+  const obtenerCodigoLote = (lote) =>
+    `LT-${lote.idLote ?? Number(String(lote.id).replace("LT-", ""))}`;
+
+  const obtenerLotesCompra = (compra) =>
+    compra.lotes || [
+      {
+        idLote: Number(
+          String(compra.idCompra ?? compra.id).replace("CPA-", "")
+        ),
+        fecha: compra.fecha,
+        producto: compra.producto,
+        cantidad: compra.cantidad,
+        precioUnitario: compra.costo / compra.cantidad,
+        subtotal: compra.costo,
+        perecible: false,
+        fechaVencimiento: "",
+      },
+    ];
+
+  const obtenerEstadoCompra = (compra) =>
+    compra.estado || "Pendiente de entrega";
+
+  const obtenerCodigoVenta = (venta) =>
+    `VT-${venta.idVenta ?? Number(String(venta.id).replace("VT-", ""))}`;
+
+  const ventasOrdenadas = [...ventas].sort((ventaA, ventaB) => {
+    const fechaA = new Date(ventaA.fecha.split("/").reverse().join("-"));
+    const fechaB = new Date(ventaB.fecha.split("/").reverse().join("-"));
+    return (
+      fechaB - fechaA +
+      ((ventaB.idVenta ?? 0) - (ventaA.idVenta ?? 0))
+    );
+  });
+  const [ventasDashboard] = useState(() => ventasOrdenadas.slice(0, 5));
+
+  const ventasFiltradas = ventasOrdenadas.filter((venta) =>
+    [obtenerCodigoVenta(venta), venta.fecha, venta.producto, venta.tipo, venta.pago]
+      .join(" ")
+      .toLowerCase()
+      .includes(busquedaVentas.toLowerCase())
+  );
+
+  const comprasOrdenadas = [...compras].sort((compraA, compraB) => {
+    const fechaA = new Date(compraA.fecha.split("/").reverse().join("-"));
+    const fechaB = new Date(compraB.fecha.split("/").reverse().join("-"));
+    return (
+      fechaB - fechaA +
+      ((compraB.idCompra ?? 0) - (compraA.idCompra ?? 0))
+    );
+  });
+
+  const comprasFiltradas = comprasOrdenadas.filter((compra) =>
+    [
+      obtenerCodigoCompra(compra),
+      compra.fecha,
+      compra.proveedor,
+      obtenerEstadoCompra(compra),
+      ...obtenerLotesCompra(compra).map((lote) => lote.producto),
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(busquedaCompras.toLowerCase())
+  );
+
+  const gastosFiltrados = gastos.filter((gasto) =>
+    [gasto.id, gasto.fecha, gasto.descripcion, gasto.categoria, gasto.monto]
+      .join(" ")
+      .toLowerCase()
+      .includes(busquedaGastos.toLowerCase())
+  );
+
+  const prepararLoteInventario = (lote, compra, producto) => ({
+    ...lote,
+    idCompra: compra.idCompra,
+    idProducto: producto.id,
+    fechaCompra: lote.fechaCompra || lote.fecha,
+    cantidadInicial: lote.cantidadInicial ?? lote.cantidad,
+    cantidadActual: lote.cantidadActual ?? lote.cantidad,
+    precioCompraUnitario: lote.precioCompraUnitario ?? lote.precioUnitario,
+  });
+
+  const calcularTotalCompra = (compra) =>
+    obtenerLotesCompra(compra).reduce(
+      (total, lote) => total + lote.precioUnitario * lote.cantidad,
+      0
+    );
+
+  const obtenerLotesProducto = (producto) =>
+    (producto.lotes || []).map((lote) => ({
+      ...lote,
+      idProducto: producto.id,
+      fechaCompra: lote.fechaCompra || lote.fecha,
+      cantidadInicial: lote.cantidadInicial ?? lote.cantidad,
+      cantidadActual: lote.cantidadActual ?? lote.cantidad,
+      precioCompraUnitario: lote.precioCompraUnitario ?? lote.precioUnitario,
+    })).concat(
+      compras
+      .filter((compra) => obtenerEstadoCompra(compra) === "Entregado")
+      .flatMap((compra) =>
+        obtenerLotesCompra(compra)
+          .filter((lote) => lote.producto === producto.nombre)
+            .map((lote) => ({
+              ...prepararLoteInventario(lote, compra, producto),
+              ordenCompra: obtenerCodigoCompra(compra),
+            }))
+      )
+    );
+
+  const siguienteLoteCompra =
+    Math.max(
+      ...compras.flatMap((compraRegistrada) =>
+        obtenerLotesCompra(compraRegistrada).map((lote) =>
+          lote.idLote ?? Number(String(lote.id).replace("LT-", ""))
+        )
+      ),
+      0
+    ) + 1;
 
   // =========================
   // VENTAS - REGISTRAR
@@ -435,14 +748,14 @@ if (Number(nuevoProducto.precio) <= 0) {
     );
 
     const venta = {
-      id: `VT-${String(
+      idVenta:
         Math.max(
           ...ventas.map((ventaRegistrada) =>
+            ventaRegistrada.idVenta ??
             Number(String(ventaRegistrada.id).replace("VT-", ""))
           ),
           0
-        ) + 1
-      ).padStart(3, "0")}`,
+        ) + 1,
       fecha: new Date().toLocaleDateString("es-PE"),
       productos: productosRegistrados,
       producto: productosRegistrados[0].nombre,
@@ -486,54 +799,130 @@ if (Number(nuevoProducto.precio) <= 0) {
   const registrarCompra = (e) => {
     e.preventDefault();
 
-    const producto = productos.find(
-      (p) => p.id === Number(nuevaCompra.productoId)
-    );
-
-    const cantidad = Number(nuevaCompra.cantidad);
-    const costo = Number(nuevaCompra.costo);
-
-    if (!nuevaCompra.proveedor || !producto) {
-      alert("Completa proveedor y producto.");
+    if (!nuevaCompra.proveedor || carritoCompra.length === 0) {
+      alert("Selecciona un proveedor y agrega al menos un producto.");
       return;
     }
 
-    if (cantidad <= 0 || costo <= 0) {
-      alert("Cantidad y costo deben ser mayores que 0.");
-      return;
-    }
-
+    const siguienteOrden =
+      Math.max(
+        ...compras.map((compraRegistrada) =>
+          compraRegistrada.idCompra ??
+          Number(String(compraRegistrada.id).replace("CPA-", ""))
+        ),
+        0
+      ) + 1;
+    const siguienteLote =
+      Math.max(
+        ...compras.flatMap((compraRegistrada) =>
+          obtenerLotesCompra(compraRegistrada).map((lote) =>
+            lote.idLote ?? Number(String(lote.id).replace("LT-", ""))
+          )
+        ),
+        0
+      ) + 1;
+    const fecha = new Date().toLocaleDateString("es-PE");
     const compra = {
-      id: Date.now(),
-      fecha: new Date().toLocaleDateString("es-PE"),
+      idCompra: siguienteOrden,
+      fecha,
       proveedor: nuevaCompra.proveedor,
-      producto: producto.nombre,
-      cantidad: cantidad,
-      costo: costo,
+      costo: totalCarritoCompra,
+      lotes: carritoCompra.map((item, indice) => ({
+        idLote: siguienteLote + indice,
+        fecha,
+        producto: item.nombre,
+        cantidad: item.cantidad,
+        cantidadInicial: item.cantidad,
+        cantidadActual: item.cantidad,
+        precioUnitario: item.precioUnitario,
+        precioCompraUnitario: item.precioUnitario,
+        subtotal: item.precioUnitario * item.cantidad,
+        perecible: item.perecible,
+        fechaVencimiento: "",
+        idProducto: item.id,
+        fechaCompra: fecha,
+      })),
+      estado: "Pendiente de entrega",
     };
 
     setCompras([compra, ...compras]);
-
-    // Aumentar stock
-    setProductos(
-      productos.map((p) =>
-        p.id === producto.id
-          ? {
-              ...p,
-              cantidad: p.cantidad + cantidad,
-            }
-          : p
-      )
-    );
 
     setNuevaCompra({
       proveedor: "",
       productoId: "",
       cantidad: 1,
-      costo: "",
+      precioUnitario: "",
     });
+    setBusquedaProveedorCompra("");
+    setBusquedaProductoCompra("");
+    setCarritoCompra([]);
 
     setMostrarCompra(false);
+  };
+
+  const validarCompra = () => {
+    if (!compraVerificando) return;
+
+    const lotes = obtenerLotesCompra(compraVerificando);
+    const faltaVencimiento = lotes.some(
+      (lote) =>
+        lote.perecible &&
+        !(fechasVencimiento[lote.idLote] || lote.fechaVencimiento)
+    );
+
+    if (faltaVencimiento) {
+      alert("Agrega la fecha de vencimiento de cada producto perecible.");
+      return;
+    }
+
+    setCompras(
+      compras.map((compra) =>
+        compra.idCompra === compraVerificando.idCompra
+          ? {
+              ...compra,
+              estado: "Entregado",
+              lotes: lotes.map((lote) => ({
+                ...lote,
+                fechaVencimiento:
+                  fechasVencimiento[lote.idLote] || lote.fechaVencimiento || "",
+              })),
+            }
+          : compra
+      )
+    );
+
+    setProductos(
+      productos.map((producto) => {
+        const lotesProducto = lotes.filter(
+          (lote) => lote.producto === producto.nombre
+        );
+        const cantidadAgregada = lotesProducto.reduce(
+          (total, lote) => total + lote.cantidad,
+          0
+        );
+        return cantidadAgregada > 0
+          ? { ...producto, cantidad: producto.cantidad + cantidadAgregada }
+          : producto;
+      })
+    );
+
+    setCompraVerificando(null);
+    setFechasVencimiento({});
+  };
+
+  const cancelarCompra = () => {
+    if (!compraCancelando) return;
+
+    setCompras(
+      compras.map((compra) =>
+        compra.idCompra === compraCancelando.idCompra
+          ? { ...compra, estado: "Cancelado" }
+          : compra
+      )
+    );
+    setCompraCancelando(null);
+    setCompraVerificando(null);
+    setFechasVencimiento({});
   };
 
   // =========================
@@ -577,7 +966,9 @@ if (Number(nuevoProducto.precio) <= 0) {
   );
 
   const totalCompras = compras.reduce(
-    (total, compra) => total + compra.costo,
+    (total, compra) =>
+      total +
+      (obtenerEstadoCompra(compra) === "Entregado" ? compra.costo : 0),
     0
   );
 
@@ -603,6 +994,14 @@ if (Number(nuevoProducto.precio) <= 0) {
 
     return resultado;
   }, {});
+
+  const ventasPorFechaRecientes = Object.entries(ventasPorFecha)
+    .sort(([fechaA], [fechaB]) => {
+      const fechaOrdenA = new Date(fechaA.split("/").reverse().join("-"));
+      const fechaOrdenB = new Date(fechaB.split("/").reverse().join("-"));
+      return fechaOrdenB - fechaOrdenA;
+    })
+    .slice(0, 5);
 
   const cambiarSeccion = (nuevaSeccion) => {
     setVentaSeleccionada(null);
@@ -814,11 +1213,11 @@ if (Number(nuevoProducto.precio) <= 0) {
 
             <div className="sales-chart">
 
-              {Object.entries(ventasPorFecha).map(
+              {ventasPorFechaRecientes.map(
                 ([fecha, total]) => {
 
                   const porcentaje =
-                    (total / Math.max(...Object.values(ventasPorFecha))) *
+                    (total / Math.max(...ventasPorFechaRecientes.map(([, valor]) => valor))) *
                     100;
 
                   return (
@@ -856,10 +1255,10 @@ if (Number(nuevoProducto.precio) <= 0) {
 
                 <h3>Ventas recientes</h3>
 
-                {ventas.slice(0, 5).map((venta) => (
-                  <div className="sale-row" key={venta.id}>
+                {ventasDashboard.map((venta) => (
+                  <div className="sale-row" key={venta.idVenta ?? venta.id}>
                     <span>
-                      Venta {venta.id} -{" "}
+                      Venta {obtenerCodigoVenta(venta)} -{" "}
                       {venta.producto}
                     </span>
 
@@ -950,9 +1349,9 @@ if (Number(nuevoProducto.precio) <= 0) {
                   <thead>
                     <tr>
                       <th>Producto</th>
-                      <th>Cantidad</th>
-                      <th>Unidad</th>
                       <th>Precio</th>
+                      <th>Cantidad de lotes</th>
+                      <th>Cantidad actual</th>
                       <th>Estado</th>
                       <th>Acciones</th>
                     </tr>
@@ -968,17 +1367,21 @@ if (Number(nuevoProducto.precio) <= 0) {
                           <strong>{producto.nombre}</strong>
                         </td>
 
-                        <td>{producto.cantidad}</td>
-
-                        <td>{producto.unidad}</td>
-
                         <td>
                           S/ {producto.precio.toFixed(2)}
                         </td>
 
+                        <td>{obtenerLotesProducto(producto).length}</td>
+
+                        <td>{producto.cantidad}</td>
+
                         <td>
 
-                          {producto.cantidad <= 5 ? (
+                          {producto.cantidad === 0 ? (
+                            <span className="status-badge out-of-stock">
+                              Sin stock
+                            </span>
+                          ) : producto.cantidad <= 5 ? (
                             <span className="status-badge low">
                               Stock bajo
                             </span>
@@ -993,23 +1396,14 @@ if (Number(nuevoProducto.precio) <= 0) {
                         <td>
 
                           <div className="action-buttons">
-
                             <button
-                              className="action-button"
+                              type="button"
+                              className="details-button"
                               onClick={() =>
-                                abrirEditarProducto(producto)
+                                setProductoInventarioSeleccionado(producto)
                               }
                             >
-                              ✏️ Editar
-                            </button>
-
-                            <button
-                              className="action-button delete"
-                              onClick={() =>
-                                eliminarProducto(producto.id)
-                              }
-                            >
-                              🗑️ Eliminar
+                              <span aria-hidden="true">👁</span> Detalles
                             </button>
 
                           </div>
@@ -1085,6 +1479,15 @@ if (Number(nuevoProducto.precio) <= 0) {
 
               <h3>Historial de ventas</h3>
 
+              <div className="history-toolbar">
+                <input
+                  type="text"
+                  placeholder="Buscar por código, producto, fecha o pago..."
+                  value={busquedaVentas}
+                  onChange={(e) => setBusquedaVentas(e.target.value)}
+                />
+              </div>
+
               <div className="table-container">
 
                 <table>
@@ -1102,9 +1505,9 @@ if (Number(nuevoProducto.precio) <= 0) {
 
                   <tbody>
 
-                    {ventas.map((venta) => (
-                      <tr key={venta.id}>
-                        <td>{venta.id}</td>
+                    {ventasFiltradas.map((venta) => (
+                      <tr key={venta.idVenta ?? venta.id}>
+                        <td>{obtenerCodigoVenta(venta)}</td>
                         <td>{venta.fecha}</td>
                         <td>
                           {venta.cantidadProductos || obtenerProductosVenta(venta).length}
@@ -1172,36 +1575,78 @@ if (Number(nuevoProducto.precio) <= 0) {
 
               <h3>Historial de compras</h3>
 
+              <div className="history-toolbar">
+                <input
+                  type="text"
+                  placeholder="Buscar por código, proveedor, producto, fecha o estado..."
+                  value={busquedaCompras}
+                  onChange={(e) => setBusquedaCompras(e.target.value)}
+                />
+              </div>
+
               <div className="table-container">
 
                 <table>
 
                   <thead>
                     <tr>
-                      <th>Fecha</th>
+                      <th>Orden de compra</th>
+                      <th>Fecha de compra</th>
                       <th>Proveedor</th>
-                      <th>Producto</th>
-                      <th>Cantidad</th>
+                      <th>Cantidad de lotes</th>
                       <th>Costo</th>
+                      <th>Estado</th>
+                      <th>Detalles</th>
+                      <th>Verificar</th>
                     </tr>
                   </thead>
 
                   <tbody>
 
-                    {compras.map((compra) => (
-                      <tr key={compra.id}>
+                    {comprasFiltradas.map((compra) => (
+                      <tr key={compra.idCompra ?? compra.id}>
 
+                        <td>{obtenerCodigoCompra(compra)}</td>
                         <td>{compra.fecha}</td>
                         <td>{compra.proveedor}</td>
-
-                        <td>
-                          <strong>{compra.producto}</strong>
-                        </td>
-
-                        <td>{compra.cantidad}</td>
-
+                        <td>{obtenerLotesCompra(compra).length}</td>
                         <td>
                           S/ {compra.costo.toFixed(2)}
+                        </td>
+                        <td>
+                          <span className={`purchase-status ${obtenerEstadoCompra(compra).toLowerCase().replaceAll(" ", "-")}`}>
+                            {obtenerEstadoCompra(compra)}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="details-button"
+                            onClick={() => setCompraSeleccionada(compra)}
+                          >
+                            <span aria-hidden="true">👁</span> Detalles
+                          </button>
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="details-button"
+                            disabled={obtenerEstadoCompra(compra) !== "Pendiente de entrega"}
+                            onClick={() => {
+                              setCompraVerificando(compra);
+                              setFechasVencimiento(
+                                obtenerLotesCompra(compra).reduce(
+                                  (fechas, lote) => ({
+                                    ...fechas,
+                                    [lote.idLote]: lote.fechaVencimiento || "",
+                                  }),
+                                  {}
+                                )
+                              );
+                            }}
+                          >
+                            Verificar
+                          </button>
                         </td>
 
                       </tr>
@@ -1254,6 +1699,15 @@ if (Number(nuevoProducto.precio) <= 0) {
 
               <h3>Historial de gastos</h3>
 
+              <div className="history-toolbar">
+                <input
+                  type="text"
+                  placeholder="Buscar por fecha, descripción, categoría o monto..."
+                  value={busquedaGastos}
+                  onChange={(e) => setBusquedaGastos(e.target.value)}
+                />
+              </div>
+
               <div className="table-container">
 
                 <table>
@@ -1269,7 +1723,7 @@ if (Number(nuevoProducto.precio) <= 0) {
 
                   <tbody>
 
-                    {gastos.map((gasto) => (
+                    {gastosFiltrados.map((gasto) => (
                       <tr key={gasto.id}>
 
                         <td>{gasto.fecha}</td>
@@ -1301,103 +1755,74 @@ if (Number(nuevoProducto.precio) <= 0) {
         {seccion === "reportes" && (
           <>
             <div className="page-header">
-
-              <div>
-                <h1>Reportes</h1>
-                <p>Resumen de información del negocio</p>
-              </div>
-
+              <h1>REPORTES</h1>
             </div>
 
-            <div className="stats-grid">
+            <div className="reports-panel">
+              <div className="reports-form">
+                <div className="form-group">
+                  <label htmlFor="tipo-reporte">Tipo de reporte</label>
+                  <select
+                    id="tipo-reporte"
+                    value={tipoReporte}
+                    onChange={(e) => setTipoReporte(e.target.value)}
+                  >
+                    <option value="ventas">Ventas</option>
+                    <option value="productos">Productos</option>
+                    <option value="compras">Compras</option>
+                    <option value="gastos">Gastos</option>
+                    <option value="ganancias">Ganancias</option>
+                  </select>
+                </div>
 
-              <div className="stat-card">
-                <div className="stat-icon">🛒</div>
+                <div className="reports-date-row">
+                  <div className="form-group">
+                    <label htmlFor="fecha-desde">Desde</label>
+                    <input
+                      id="fecha-desde"
+                      type="date"
+                      value={fechaDesde}
+                      onChange={(e) => {
+                        const nuevaFechaDesde = e.target.value;
+                        setFechaDesde(nuevaFechaDesde);
 
-                <div>
-                  <span>Ventas</span>
-                  <h2>S/ {totalVentas.toFixed(2)}</h2>
+                        if (fechaHasta && fechaHasta < nuevaFechaDesde) {
+                          setFechaHasta("");
+                        }
+                      }}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="fecha-hasta">Hasta</label>
+                    <input
+                      id="fecha-hasta"
+                      type="date"
+                      min={fechaDesde || undefined}
+                      value={fechaHasta}
+                      onChange={(e) => {
+                        if (!fechaDesde || e.target.value >= fechaDesde) {
+                          setFechaHasta(e.target.value);
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="reports-actions">
+                  <button type="button" className="secondary-button" onClick={() => {
+                    setTipoReporte("ventas");
+                    setFechaDesde("");
+                    setFechaHasta("");
+                  }}>
+                    Limpiar
+                  </button>
+
+                  <button type="button" className="primary-button">
+                    Generar reporte
+                  </button>
                 </div>
               </div>
-
-              <div className="stat-card">
-                <div className="stat-icon">🚚</div>
-
-                <div>
-                  <span>Compras</span>
-                  <h2>S/ {totalCompras.toFixed(2)}</h2>
-                </div>
-              </div>
-
-              <div className="stat-card">
-                <div className="stat-icon">💸</div>
-
-                <div>
-                  <span>Gastos</span>
-                  <h2>S/ {totalGastos.toFixed(2)}</h2>
-                </div>
-              </div>
-
-              <div className="stat-card">
-                <div className="stat-icon">📈</div>
-
-                <div>
-                  <span>Ganancia estimada</span>
-                  <h2>S/ {gananciaEstimada.toFixed(2)}</h2>
-                </div>
-              </div>
-
-            </div>
-
-            <div className="dashboard-grid">
-
-              <div className="content-card">
-
-                <h3>Resumen financiero</h3>
-
-                <div className="sale-row">
-                  <span>Total de ventas</span>
-                  <strong>S/ {totalVentas.toFixed(2)}</strong>
-                </div>
-
-                <div className="sale-row">
-                  <span>Total de compras</span>
-                  <strong>S/ {totalCompras.toFixed(2)}</strong>
-                </div>
-
-                <div className="sale-row">
-                  <span>Total de gastos</span>
-                  <strong>S/ {totalGastos.toFixed(2)}</strong>
-                </div>
-
-                <div className="sale-row">
-                  <span>Ganancia estimada</span>
-                  <strong>S/ {gananciaEstimada.toFixed(2)}</strong>
-                </div>
-
-              </div>
-
-              <div className="content-card">
-
-                <h3>Estado del inventario</h3>
-
-                <div className="sale-row">
-                  <span>Productos registrados</span>
-                  <strong>{productos.length}</strong>
-                </div>
-
-                <div className="sale-row">
-                  <span>Productos con stock bajo</span>
-                  <strong>{stockBajo.length}</strong>
-                </div>
-
-                <div className="sale-row">
-                  <span>Ventas registradas</span>
-                  <strong>{ventas.length}</strong>
-                </div>
-
-              </div>
-
             </div>
           </>
         )}
@@ -1462,24 +1887,6 @@ if (Number(nuevoProducto.precio) <= 0) {
               </div>
 
               <div className="form-row">
-
-                <div className="form-group">
-
-                  <label>Cantidad</label>
-
-                  <input
-                    type="number"
-                    min="0"
-                    value={nuevoProducto.cantidad}
-                    onChange={(e) =>
-                      setNuevoProducto({
-                        ...nuevoProducto,
-                        cantidad: e.target.value,
-                      })
-                    }
-                  />
-
-                </div>
 
                 <div className="form-group">
 
@@ -1856,7 +2263,7 @@ if (Number(nuevoProducto.precio) <= 0) {
             <div className="modal-header">
               <div>
                 <h2>Detalles de venta</h2>
-                <p>{ventaSeleccionada.id}</p>
+                <p>{obtenerCodigoVenta(ventaSeleccionada)}</p>
               </div>
 
               <button
@@ -1885,8 +2292,8 @@ if (Number(nuevoProducto.precio) <= 0) {
                     const subtotal = producto.precio * producto.cantidad;
 
                     return (
-                      <tr key={`${ventaSeleccionada.id}-${producto.id}`}>
-                        <td>{ventaSeleccionada.id}</td>
+                      <tr key={`${ventaSeleccionada.idVenta ?? ventaSeleccionada.id}-${producto.id}`}>
+                        <td>{obtenerCodigoVenta(ventaSeleccionada)}</td>
                         <td>{producto.nombre}</td>
                         <td>{producto.cantidad}</td>
                         <td>S/ {producto.precio.toFixed(2)}</td>
@@ -1897,6 +2304,260 @@ if (Number(nuevoProducto.precio) <= 0) {
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+
+      {compraSeleccionada && (
+        <div className="modal-overlay">
+          <div className="modal-card sale-details-modal">
+            <div className="modal-header">
+              <div>
+                <h2>Detalles de compra</h2>
+              </div>
+
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setCompraSeleccionada(null)}
+                aria-label="Cerrar detalles de compra"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="sale-details-table-container">
+              <table className="sale-details-table">
+                <thead>
+                  <tr>
+                    <th>Orden de compra</th>
+                    <th>Fecha de compra</th>
+                    <th>Fecha de vencimiento</th>
+                    <th>ID lote</th>
+                    <th>Producto</th>
+                    <th>Cantidad</th>
+                    <th>Precio de compra</th>
+                    <th>Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {obtenerLotesCompra(compraSeleccionada).map((lote) => (
+                    <tr
+                      key={`${compraSeleccionada.idCompra ?? compraSeleccionada.id}-${lote.idLote ?? lote.id}`}
+                    >
+                      <td>{obtenerCodigoCompra(compraSeleccionada)}</td>
+                      <td>{lote.fecha}</td>
+                      <td>{lote.fechaVencimiento || "---"}</td>
+                      <td>{obtenerCodigoLote(lote)}</td>
+                      <td>{lote.producto}</td>
+                      <td>{lote.cantidad}</td>
+                      <td>
+                        <span className="money-value">
+                          <span>S/</span>
+                          <span>{lote.precioUnitario.toFixed(2)}</span>
+                        </span>
+                      </td>
+                      <td>
+                        <span className="money-value">
+                          <span>S/</span>
+                          <span>{(lote.precioUnitario * lote.cantidad).toFixed(2)}</span>
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan="6">
+                      <strong>Total de compra</strong>
+                    </td>
+                    <td>
+                      <strong className="money-value">
+                        <span>S/</span>
+                        <span>{calcularTotalCompra(compraSeleccionada).toFixed(2)}</span>
+                      </strong>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {productoInventarioSeleccionado && (
+        <div className="modal-overlay">
+          <div className="modal-card sale-details-modal">
+            <div className="modal-header">
+              <div>
+                <h2>Detalles de producto</h2>
+                <p>{productoInventarioSeleccionado.nombre}</p>
+              </div>
+
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setProductoInventarioSeleccionado(null)}
+                aria-label="Cerrar detalles del producto"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="sale-details-table-container">
+              <table className="sale-details-table">
+                <thead>
+                  <tr>
+                    <th>ID orden de compra</th>
+                    <th>ID lote</th>
+                    <th>Producto</th>
+                    <th>Unidad</th>
+                    <th>Cantidad actual</th>
+                    <th>Fecha de compra</th>
+                    <th>Fecha de expiración</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {obtenerLotesProducto(productoInventarioSeleccionado).length > 0 ? (
+                    obtenerLotesProducto(productoInventarioSeleccionado).map((lote) => (
+                      <tr key={`${lote.ordenCompra}-${lote.idLote}`}>
+                        <td>{lote.ordenCompra}</td>
+                        <td>{obtenerCodigoLote(lote)}</td>
+                        <td>{lote.producto}</td>
+                        <td>{productoInventarioSeleccionado.unidad}</td>
+                        <td>{lote.cantidadActual}</td>
+                        <td>{lote.fecha}</td>
+                        <td>{lote.fechaVencimiento || "---"}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="7">No hay lotes registrados para este producto.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {compraVerificando && (
+        <div className="modal-overlay">
+          <div className="modal-card sale-details-modal purchase-verification-modal">
+            <div className="modal-header">
+              <div>
+                <h2>Verificar compra</h2>
+                <p>{obtenerCodigoCompra(compraVerificando)}</p>
+              </div>
+
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => {
+                  setCompraVerificando(null);
+                  setFechasVencimiento({});
+                }}
+                aria-label="Volver al panel anterior"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="purchase-verification-summary">
+              <strong>ID de compra</strong>
+              <span>{obtenerCodigoCompra(compraVerificando)}</span>
+              <strong>Fecha de compra</strong>
+              <span>{compraVerificando.fecha}</span>
+            </div>
+
+            <div className="sale-details-table-container">
+              <table className="sale-details-table">
+                <thead>
+                  <tr>
+                    <th>ID lote</th>
+                    <th>Producto</th>
+                    <th>Cantidad</th>
+                    <th>Precio de compra</th>
+                    <th>Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {obtenerLotesCompra(compraVerificando).map((lote) => (
+                    <tr key={lote.idLote}>
+                      <td>{obtenerCodigoLote(lote)}</td>
+                      <td>{lote.producto}</td>
+                      <td>{lote.cantidad}</td>
+                      <td>S/ {lote.precioUnitario.toFixed(2)}</td>
+                      <td>
+                        S/ {(lote.precioUnitario * lote.cantidad).toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan="4"><strong>Total final</strong></td>
+                    <td><strong>S/ {calcularTotalCompra(compraVerificando).toFixed(2)}</strong></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            <div className="expiration-section">
+              <h3>Fechas de vencimiento</h3>
+              {obtenerLotesCompra(compraVerificando).some((lote) => lote.perecible) ? (
+                obtenerLotesCompra(compraVerificando)
+                  .filter((lote) => lote.perecible)
+                  .map((lote) => (
+                    <div className="expiration-row" key={lote.idLote}>
+                      <label htmlFor={`expiration-${lote.idLote}`}>
+                        {obtenerCodigoLote(lote)} - {lote.producto}
+                      </label>
+                      <input
+                        id={`expiration-${lote.idLote}`}
+                        type="date"
+                        value={fechasVencimiento[lote.idLote] || ""}
+                        onChange={(e) =>
+                          setFechasVencimiento({
+                            ...fechasVencimiento,
+                            [lote.idLote]: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  ))
+              ) : (
+                <p>No hay productos perecibles en esta compra.</p>
+              )}
+            </div>
+
+            {compraCancelando ? (
+              <div className="cancel-confirmation">
+                <strong>¿Estas seguro de cancelar esta orden de compra?</strong>
+                <div className="modal-actions">
+                  <button type="button" className="danger-button" onClick={cancelarCompra}>
+                    Cancelar compra
+                  </button>
+                  <button type="button" className="secondary-button" onClick={() => setCompraCancelando(null)}>
+                    Volver al panel anterior
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="modal-actions verification-actions">
+                <button
+                  type="button"
+                  className="danger-button"
+                  onClick={() => setCompraCancelando(compraVerificando)}
+                >
+                  Cancelar orden de compra
+                </button>
+                <button type="button" className="primary-button" onClick={validarCompra}>
+                  Validar compra
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1918,7 +2579,18 @@ if (Number(nuevoProducto.precio) <= 0) {
 
               <button
                 className="modal-close"
-                onClick={() => setMostrarCompra(false)}
+                onClick={() => {
+                  setMostrarCompra(false);
+                  setNuevaCompra({
+                    proveedor: "",
+                    productoId: "",
+                    cantidad: 1,
+                    precioUnitario: "",
+                  });
+                  setBusquedaProveedorCompra("");
+                  setBusquedaProductoCompra("");
+                  setCarritoCompra([]);
+                }}
               >
                 ×
               </button>
@@ -1931,17 +2603,42 @@ if (Number(nuevoProducto.precio) <= 0) {
 
                 <label>Proveedor</label>
 
-                <input
-                  type="text"
-                  placeholder="Nombre del proveedor"
-                  value={nuevaCompra.proveedor}
-                  onChange={(e) =>
-                    setNuevaCompra({
-                      ...nuevaCompra,
-                      proveedor: e.target.value,
-                    })
-                  }
-                />
+                <div className="product-autocomplete">
+                  <input
+                    type="text"
+                    placeholder="Escribe para buscar un proveedor"
+                    value={busquedaProveedorCompra}
+                    disabled={carritoCompra.length > 0}
+                    onChange={(e) => {
+                      setBusquedaProveedorCompra(e.target.value);
+                      setNuevaCompra({ ...nuevaCompra, proveedor: "" });
+                    }}
+                  />
+
+                  {busquedaProveedorCompra.trim() && !nuevaCompra.proveedor && (
+                    <div className="product-suggestions">
+                      {proveedoresFiltrados.length > 0 ? (
+                        proveedoresFiltrados.map((proveedor) => (
+                          <button
+                            type="button"
+                            className="product-suggestion"
+                            key={proveedor}
+                            onClick={() => {
+                              setBusquedaProveedorCompra(proveedor);
+                              setNuevaCompra({ ...nuevaCompra, proveedor });
+                            }}
+                          >
+                            <span>{proveedor}</span>
+                          </button>
+                        ))
+                      ) : (
+                        <p className="product-suggestions-empty">
+                          No se encontraron proveedores.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
 
               </div>
 
@@ -1949,68 +2646,168 @@ if (Number(nuevoProducto.precio) <= 0) {
 
                 <label>Producto</label>
 
-                <select
-                  value={nuevaCompra.productoId}
-                  onChange={(e) =>
-                    setNuevaCompra({
-                      ...nuevaCompra,
-                      productoId: e.target.value,
-                    })
-                  }
-                >
+                <div className="product-autocomplete">
+                  <input
+                    type="text"
+                    placeholder="Escribe para buscar un producto"
+                    value={busquedaProductoCompra}
+                    onChange={(e) => {
+                      setBusquedaProductoCompra(e.target.value);
+                      setNuevaCompra({ ...nuevaCompra, productoId: "" });
+                    }}
+                  />
 
-                  <option value="">
-                    Seleccionar producto
-                  </option>
-
-                  {productos.map((producto) => (
-                    <option
-                      key={producto.id}
-                      value={producto.id}
-                    >
-                      {producto.nombre}
-                    </option>
-                  ))}
-
-                </select>
+                  {busquedaProductoCompra.trim() && !productoSeleccionadoCompra && (
+                    <div className="product-suggestions">
+                      {productosCompraFiltrados.length > 0 ? (
+                        productosCompraFiltrados.map((producto) => (
+                          <button
+                            type="button"
+                            className="product-suggestion"
+                            key={producto.id}
+                            onClick={() => {
+                              setBusquedaProductoCompra(producto.nombre);
+                              setNuevaCompra({
+                                ...nuevaCompra,
+                                productoId: producto.id,
+                                precioUnitario: producto.precioCompra,
+                              });
+                            }}
+                          >
+                            <span>{producto.nombre}</span>
+                          </button>
+                        ))
+                      ) : (
+                        <p className="product-suggestions-empty">
+                          No se encontraron productos.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
 
               </div>
 
               <div className="form-group">
 
-                <label>Cantidad</label>
+                <div className="sale-quantity-row">
+                  <div>
+                    <label htmlFor="purchase-quantity">Cantidad</label>
+                    <input
+                      id="purchase-quantity"
+                      type="number"
+                      min="1"
+                      value={nuevaCompra.cantidad}
+                      onChange={(e) =>
+                        setNuevaCompra({
+                          ...nuevaCompra,
+                          cantidad: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
 
-                <input
-                  type="number"
-                  min="1"
-                  value={nuevaCompra.cantidad}
-                  onChange={(e) =>
-                    setNuevaCompra({
-                      ...nuevaCompra,
-                      cantidad: e.target.value,
-                    })
-                  }
-                />
+                  <div>
+                    <label>Precio unitario</label>
+                    <strong>
+                      {productoSeleccionadoCompra
+                        ? `S/ ${Number(nuevaCompra.precioUnitario).toFixed(2)}`
+                        : "-"}
+                    </strong>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="add-product-button"
+                  onClick={agregarProductoCompra}
+                >
+                  + Agregar producto
+                </button>
 
               </div>
 
               <div className="form-group">
 
                 <label>Costo total de compra</label>
+                <strong>S/ {totalCarritoCompra.toFixed(2)}</strong>
 
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={nuevaCompra.costo}
-                  onChange={(e) =>
-                    setNuevaCompra({
-                      ...nuevaCompra,
-                      costo: e.target.value,
-                    })
-                  }
-                />
+              </div>
+
+              <div className="form-group sale-products-group">
+
+                <label>Productos agregados</label>
+
+                {carritoCompra.length > 0 ? (
+                  <div className="sale-products-table-container">
+                    <table className="sale-products-table">
+                      <thead>
+                        <tr>
+                          <th>ID lote</th>
+                          <th>Producto</th>
+                          <th>Cantidad</th>
+                          <th>Precio unitario</th>
+                          <th>Subtotal</th>
+                          <th aria-label="Acciones"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {carritoCompra.map((item, indice) => (
+                          <tr key={`${item.id}-${indice}`}>
+                            <td>LT-{siguienteLoteCompra + indice}</td>
+                            <td>{item.nombre}</td>
+                            <td>
+                              <div className="quantity-controls">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    cambiarCantidadProductoCompra(indice, -1)
+                                  }
+                                  aria-label={`Disminuir cantidad de ${item.nombre}`}
+                                >
+                                  -
+                                </button>
+                                <strong>{item.cantidad}</strong>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    cambiarCantidadProductoCompra(indice, 1)
+                                  }
+                                  aria-label={`Aumentar cantidad de ${item.nombre}`}
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </td>
+                            <td>S/ {item.precioUnitario.toFixed(2)}</td>
+                            <td>
+                              S/ {(item.precioUnitario * item.cantidad).toFixed(2)}
+                            </td>
+                            <td>
+                              <button
+                                type="button"
+                                className="remove-product-button"
+                                onClick={() =>
+                                  setCarritoCompra(
+                                    carritoCompra.filter((_, itemIndex) => itemIndex !== indice)
+                                  )
+                                }
+                                aria-label={`Eliminar ${item.nombre}`}
+                                title="Eliminar producto"
+                              >
+                                🗑️
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="sale-products-empty">
+                    Todavía no has agregado productos.
+                  </p>
+                )}
 
               </div>
 
@@ -2019,7 +2816,18 @@ if (Number(nuevoProducto.precio) <= 0) {
                 <button
                   type="button"
                   className="secondary-button"
-                  onClick={() => setMostrarCompra(false)}
+                  onClick={() => {
+                    setMostrarCompra(false);
+                    setNuevaCompra({
+                      proveedor: "",
+                      productoId: "",
+                      cantidad: 1,
+                      precioUnitario: "",
+                    });
+                    setBusquedaProveedorCompra("");
+                    setBusquedaProductoCompra("");
+                    setCarritoCompra([]);
+                  }}
                 >
                   Cancelar
                 </button>

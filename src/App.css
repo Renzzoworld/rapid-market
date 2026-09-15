@@ -235,6 +235,33 @@ body {
   color: #6b7280;
 }
 
+.reports-panel {
+  display: flex;
+  justify-content: center;
+  padding-top: 70px;
+}
+
+.reports-form {
+  width: min(680px, 100%);
+  padding: 30px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.05);
+}
+
+.reports-date-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.reports-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 8px;
+}
+
 /* =========================
    TARJETAS DEL DASHBOARD
    ========================= */
@@ -406,7 +433,30 @@ body {
 
 .table-container {
   width: 100%;
-  overflow-x: auto;
+  max-height: 570px;
+  overflow: auto;
+  direction: rtl;
+}
+
+.table-container table {
+  direction: ltr;
+}
+
+.history-toolbar {
+  margin: 14px 0 18px;
+}
+
+.history-toolbar input {
+  width: min(520px, 100%);
+  padding: 12px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 15px;
+  outline: none;
+}
+
+.history-toolbar input:focus {
+  border-color: #2563eb;
 }
 
 .table-container table {
@@ -450,6 +500,35 @@ body {
 
 .details-button:hover {
   background: #dbeafe;
+}
+
+.details-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.purchase-status {
+  display: inline-block;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.purchase-status.pendiente-de-entrega {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.purchase-status.entregado {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.purchase-status.cancelado {
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 .sale-history-row {
@@ -510,6 +589,11 @@ body {
 .status-badge.low {
   background: #fee2e2;
   color: #991b1b;
+}
+
+.status-badge.out-of-stock {
+  background: #e5e7eb;
+  color: #374151;
 }
 
 /* =========================
@@ -599,6 +683,91 @@ body {
 
 .sale-details-table td {
   color: #374151;
+}
+
+.money-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.purchase-verification-summary {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 18px;
+  margin-bottom: 22px;
+  color: #374151;
+}
+
+.purchase-verification-summary strong {
+  color: #111827;
+}
+
+.expiration-section {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.expiration-section h3 {
+  margin: 0 0 14px;
+  color: #111827;
+  font-size: 16px;
+}
+
+.expiration-section p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.expiration-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.expiration-row label {
+  color: #374151;
+  font-size: 14px;
+}
+
+.expiration-row input {
+  width: 170px;
+}
+
+.verification-actions {
+  justify-content: space-between;
+}
+
+.danger-button {
+  border: 1px solid #dc2626;
+  background: #dc2626;
+  color: white;
+  padding: 13px 20px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.danger-button:hover {
+  background: #b91c1c;
+}
+
+.cancel-confirmation {
+  margin-top: 24px;
+  padding: 16px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+}
+
+.cancel-confirmation strong {
+  color: #991b1b;
 }
 
 .modal-header {
@@ -975,6 +1144,10 @@ body {
   }
 
   .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .reports-date-row {
     grid-template-columns: 1fr;
   }
 }
