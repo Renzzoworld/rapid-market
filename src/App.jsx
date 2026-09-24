@@ -329,19 +329,18 @@ function App() {
   // =========================
   // INVENTARIO - NUEVO
   // =========================
-  const abrirNuevoProducto = () => {
-    setProductoEditando(null);
+const abrirNuevoProducto = () => {
+  setProductoEditando(null);
 
-    setNuevoProducto({
-      nombre: "",
-      cantidad: 0,
-      unidad: "unidad",
-      precio: "",
-      perecible: false,
-    });
+  setNuevoProducto({
+    nombre: "",
+    unidad: "unidad",
+    precio: "",
+    perecible: false,
+  });
 
-    setMostrarFormulario(true);
-  };
+  setMostrarFormulario(true);
+};
 
   // =========================
   // INVENTARIO - EDITAR
@@ -350,11 +349,10 @@ function App() {
     setProductoEditando(producto);
 
     setNuevoProducto({
-      nombre: producto.nombre,
-      cantidad: producto.cantidad,
-      unidad: producto.unidad,
-      precio: producto.precio,
-    });
+  nombre: producto.nombre,
+  unidad: producto.unidad,
+  precio: producto.precio,
+});
 
     setMostrarFormulario(true);
   };
@@ -377,34 +375,33 @@ if (Number(nuevoProducto.precio) <= 0) {
   alert("El precio debe ser mayor que 0.");
   return;
 }
-    if (productoEditando) {
-      setProductos(
-        productos.map((producto) =>
-          producto.id === productoEditando.id
-            ? {
-                ...producto,
-                nombre: nuevoProducto.nombre,
-                cantidad: Number(nuevoProducto.cantidad),
-                unidad: nuevoProducto.unidad,
-                precio: Number(nuevoProducto.precio),
-                precioVenta: Number(nuevoProducto.precio),
-              }
-            : producto
-        )
-      );
-    } else {
-      const nuevo = {
-        id: Date.now(),
-        nombre: nuevoProducto.nombre,
-        cantidad: Number(nuevoProducto.cantidad),
-        unidad: nuevoProducto.unidad,
-        precio: Number(nuevoProducto.precio),
-        precioVenta: Number(nuevoProducto.precio),
-        perecible: false,
-      };
+if (productoEditando) {
+  setProductos(
+    productos.map((producto) =>
+      producto.id === productoEditando.id
+        ? {
+            ...producto,
+            nombre: nuevoProducto.nombre,
+            unidad: nuevoProducto.unidad,
+            precio: Number(nuevoProducto.precio),
+            precioVenta: Number(nuevoProducto.precio),
+          }
+        : producto
+    )
+  );
+} else {
+  const nuevo = {
+    id: Date.now(),
+    nombre: nuevoProducto.nombre,
+    cantidad: 0,
+    unidad: nuevoProducto.unidad,
+    precio: Number(nuevoProducto.precio),
+    precioVenta: Number(nuevoProducto.precio),
+    perecible: false,
+  };
 
-      setProductos([...productos, nuevo]);
-    }
+  setProductos([...productos, nuevo]);
+}
 
     setMostrarFormulario(false);
 
@@ -771,15 +768,123 @@ if (Number(nuevoProducto.precio) <= 0) {
 
     setVentas([venta, ...ventas]);
 
-    // Descontar stock
-    setProductos(
-      productos.map((producto) => {
-        const item = carritoVenta.find((linea) => linea.id === producto.id);
-        return item
-          ? { ...producto, cantidad: producto.cantidad - item.cantidad }
-          : producto;
-      })
+    // Descontar stock general
+setProductos(
+  productos.map((producto) => {
+    const item = carritoVenta.find(
+      (linea) => linea.id === producto.id
     );
+
+    if (!item) {
+      return producto;
+    }
+
+    return {
+      ...producto,
+      cantidad: producto.cantidad - item.cantidad,
+    };
+  })
+);
+
+// Actualizar cantidad de los lotes usando FIFO
+const cantidadesRestantes = {};
+
+carritoVenta.forEach((item) => {
+  cantidadesRestantes[item.id] = item.cantidad;
+});
+
+// Obtener todos los lotes entregados y ordenarlos del más antiguo al más reciente
+const lotesDisponibles = compras
+  .filter((compra) => obtenerEstadoCompra(compra) === "Entregado")
+  .flatMap((compra) =>
+    (compra.lotes || []).map((lote) => ({
+      idCompra: compra.idCompra,
+      idLote: lote.idLote,
+      producto: lote.producto,
+      fechaCompra: lote.fechaCompra || lote.fecha,
+      cantidadActual: Number(
+        lote.cantidadActual ?? lote.cantidad ?? 0
+      ),
+    }))
+  )
+  .sort((a, b) => {
+    const fechaA = new Date(
+      a.fechaCompra.split("/").reverse().join("-")
+    );
+
+    const fechaB = new Date(
+      b.fechaCompra.split("/").reverse().join("-")
+    );
+
+    const diferenciaFecha = fechaA - fechaB;
+
+    if (diferenciaFecha !== 0) {
+      return diferenciaFecha;
+    }
+
+    return (
+      Number(String(a.idCompra).replace("CPA-", "")) -
+      Number(String(b.idCompra).replace("CPA-", ""))
+    );
+  });
+
+// Determinar cuánto descontar de cada lote
+const descuentosPorLote = {};
+
+lotesDisponibles.forEach((lote) => {
+  const producto = productos.find(
+    (p) => p.nombre === lote.producto
+  );
+
+  if (!producto) {
+    return;
+  }
+
+  const cantidadRestante =
+    cantidadesRestantes[producto.id] || 0;
+
+  if (
+    cantidadRestante <= 0 ||
+    lote.cantidadActual <= 0
+  ) {
+    return;
+  }
+
+  const cantidadDescontar = Math.min(
+    lote.cantidadActual,
+    cantidadRestante
+  );
+
+  descuentosPorLote[
+    `${lote.idCompra}-${lote.idLote}`
+  ] = cantidadDescontar;
+
+  cantidadesRestantes[producto.id] -= cantidadDescontar;
+});
+
+// Aplicar los descuentos a los lotes correspondientes
+setCompras(
+  compras.map((compra) => ({
+    ...compra,
+    lotes: (compra.lotes || []).map((lote) => {
+      const clave = `${compra.idCompra}-${lote.idLote}`;
+      const descuento = descuentosPorLote[clave] || 0;
+
+      if (descuento === 0) {
+        return lote;
+      }
+
+      const cantidadActual = Number(
+        lote.cantidadActual ?? lote.cantidad ?? 0
+      );
+
+      return {
+        ...lote,
+        cantidadActual: cantidadActual - descuento,
+      };
+    }),
+  }))
+);
 
     setNuevaVenta({
       productoId: "",
@@ -1396,17 +1501,26 @@ if (Number(nuevoProducto.precio) <= 0) {
                         <td>
 
                           <div className="action-buttons">
-                            <button
-                              type="button"
-                              className="details-button"
-                              onClick={() =>
-                                setProductoInventarioSeleccionado(producto)
-                              }
-                            >
-                              <span aria-hidden="true">👁</span> Detalles
-                            </button>
 
-                          </div>
+  <button
+    type="button"
+    className="details-button"
+    onClick={() =>
+      setProductoInventarioSeleccionado(producto)
+    }
+  >
+    <span aria-hidden="true">👁</span> Detalles
+  </button>
+
+  <button
+    type="button"
+    className="edit-button"
+    onClick={() => abrirEditarProducto(producto)}
+  >
+    <span aria-hidden="true">✏️</span> Editar
+  </button>
+
+</div>
 
                         </td>
 
@@ -2670,7 +2784,7 @@ if (Number(nuevoProducto.precio) <= 0) {
                               setNuevaCompra({
                                 ...nuevaCompra,
                                 productoId: producto.id,
-                                precioUnitario: producto.precioCompra,
+                                precioUnitario: "",
                               });
                             }}
                           >
@@ -2708,12 +2822,25 @@ if (Number(nuevoProducto.precio) <= 0) {
                   </div>
 
                   <div>
-                    <label>Precio unitario</label>
-                    <strong>
-                      {productoSeleccionadoCompra
-                        ? `S/ ${Number(nuevaCompra.precioUnitario).toFixed(2)}`
-                        : "-"}
-                    </strong>
+                    <label htmlFor="purchase-unit-price">
+    Precio unitario de compra
+  </label>
+
+  <input
+    id="purchase-unit-price"
+    type="number"
+    min="0.01"
+    step="0.01"
+    placeholder="Ej. 1.80"
+    value={nuevaCompra.precioUnitario}
+    disabled={!productoSeleccionadoCompra}
+    onChange={(e) =>
+      setNuevaCompra({
+        ...nuevaCompra,
+        precioUnitario: e.target.value,
+      })
+    }
+  />
                   </div>
                 </div>
 
