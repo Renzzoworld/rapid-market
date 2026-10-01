@@ -12,6 +12,24 @@ dist
 dist-ssr
 *.local
 
+# Python environments and generated files
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.sqlite3
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local configuration and database backups
+.env
+.env.*
+!.env.example
+*.dump
+*.backup
+*.bak
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

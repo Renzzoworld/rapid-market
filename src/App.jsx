@@ -1,16 +1,55 @@
 import { useState } from "react";
 import "./App.css";
 
-function App() {
-  // =========================
-  // LOGIN Y NAVEGACIÓN
-  // =========================
-  const [logueado, setLogueado] = useState(false);
-  const [seccion, setSeccion] = useState("inicio");
+// URL base usada por las peticiones de autenticacion del frontend.
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api";
 
+function App() {
+  // ===== LOGIN FRONTEND: INICIO =====
+  // Estado de sesion, credenciales del formulario y token JWT en memoria.
+  const [logueado, setLogueado] = useState(false);
   const [usuario, setUsuario] = useState("");
   const [password, setPassword] = useState("");
   const [errorLogin, setErrorLogin] = useState("");
+  const [_accessToken, setAccessToken] = useState("");
+
+  // Envia las credenciales a Django y abre la aplicacion si recibe un JWT.
+  const iniciarSesion = async (e) => {
+    e.preventDefault();
+    setErrorLogin("");
+
+    try {
+      const response = await fetch(`${API_URL}/login/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: usuario, password }),
+      });
+
+      if (!response.ok) {
+        setErrorLogin("Usuario o contraseña incorrectos");
+        return;
+      }
+
+      const data = await response.json();
+      setAccessToken(data.access);
+      setLogueado(true);
+    } catch {
+      setErrorLogin("No se pudo conectar con el servidor. Inténtalo de nuevo.");
+    }
+  };
+
+  // Limpia la sesion local y devuelve al formulario de acceso.
+  const cerrarSesion = () => {
+    setLogueado(false);
+    setAccessToken("");
+    setUsuario("");
+    setPassword("");
+    setSeccion("inicio");
+  };
+  // ===== LOGIN FRONTEND: FIN =====
+
+  // Navegacion de las secciones principales de la aplicacion.
+  const [seccion, setSeccion] = useState("inicio");
 
   const [tipoReporte, setTipoReporte] = useState("ventas");
   const [fechaDesde, setFechaDesde] = useState("");
@@ -311,20 +350,6 @@ function App() {
     categoria: "Operativo",
     monto: "",
   });
-
-  // =========================
-  // LOGIN
-  // =========================
-  const iniciarSesion = (e) => {
-    e.preventDefault();
-
-    if (usuario === "admin" && password === "123456") {
-      setLogueado(true);
-      setErrorLogin("");
-    } else {
-      setErrorLogin("Usuario o contraseña incorrectos");
-    }
-  };
 
   // =========================
   // INVENTARIO - NUEVO
@@ -1113,19 +1138,8 @@ setCompras(
     setSeccion(nuevaSeccion);
   };
 
-  // =========================
-  // CERRAR SESIÓN
-  // =========================
-  const cerrarSesion = () => {
-    setLogueado(false);
-    setUsuario("");
-    setPassword("");
-    setSeccion("inicio");
-  };
-
-  // =========================
-  // LOGIN
-  // =========================
+  // ===== FORMULARIO LOGIN: INICIO =====
+  // Esta vista se muestra hasta que Django confirma las credenciales.
   if (!logueado) {
     return (
       <div className="login-container">
@@ -1166,6 +1180,7 @@ setCompras(
       </div>
     );
   }
+  // ===== FORMULARIO LOGIN: FIN =====
 
   // =========================
   // SISTEMA PRINCIPAL
