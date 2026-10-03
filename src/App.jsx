@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
 
 // URL base usada por las peticiones de autenticacion del frontend.
@@ -11,7 +11,7 @@ function App() {
   const [usuario, setUsuario] = useState("");
   const [password, setPassword] = useState("");
   const [errorLogin, setErrorLogin] = useState("");
-  const [_accessToken, setAccessToken] = useState("");
+  const [accessToken, setAccessToken] = useState("");
 
   // Envia las credenciales a Django y abre la aplicacion si recibe un JWT.
   const iniciarSesion = async (e) => {
@@ -51,13 +51,110 @@ function App() {
   // Navegacion de las secciones principales de la aplicacion.
   const [seccion, setSeccion] = useState("inicio");
 
+  // Filtros de la sección de reportes, separados de Dashboard e Inventario.
   const [tipoReporte, setTipoReporte] = useState("ventas");
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
 
-  // =========================
-  // INVENTARIO
-  // =========================
+  // ===== DASHBOARD FRONTEND: INICIO =====
+  // Estado y consulta protegida del resumen al abrir la pantalla principal.
+  const [dashboardResumen, setDashboardResumen] = useState({
+    total_productos: 0,
+    productos_stock_bajo: [],
+    ventas_acumuladas: 0,
+    ganancia_estimada: 0,
+    ventas_por_fecha: [],
+    ventas_recientes: [],
+  });
+  const [cargandoDashboard, setCargandoDashboard] = useState(false);
+  const [errorDashboard, setErrorDashboard] = useState("");
+
+  useEffect(() => {
+    if (!logueado || seccion !== "inicio" || !accessToken) return undefined;
+
+    const controller = new AbortController();
+    const cargarDashboard = async () => {
+      setCargandoDashboard(true);
+      setErrorDashboard("");
+
+      try {
+        const response = await fetch(`${API_URL}/dashboard/`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error("No se pudo cargar el resumen del dashboard.");
+        }
+
+        setDashboardResumen(await response.json());
+      } catch (error) {
+        if (error.name !== "AbortError") {
+          setErrorDashboard(error.message);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setCargandoDashboard(false);
+        }
+      }
+    };
+
+    cargarDashboard();
+    return () => controller.abort();
+  }, [logueado, seccion, accessToken]);
+  // ===== DASHBOARD FRONTEND: FIN =====
+
+  // ===== INVENTORY FRONTEND: INICIO =====
+  // Incluye carga autenticada del API, estado de productos y controles del módulo.
+  const [inventarioResumen, setInventarioResumen] = useState({
+    total_productos: 0,
+    stock_bajo: 0,
+    productos: [],
+  });
+  const [cargandoInventario, setCargandoInventario] = useState(false);
+  const [errorInventario, setErrorInventario] = useState("");
+
+  useEffect(() => {
+    if (!logueado || seccion !== "inventario" || !accessToken) return undefined;
+
+    const controller = new AbortController();
+    const cargarInventario = async () => {
+      setCargandoInventario(true);
+      setErrorInventario("");
+
+      try {
+        const response = await fetch(`${API_URL}/inventario/`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error("No se pudo cargar el inventario.");
+        }
+
+        const data = await response.json();
+        setInventarioResumen({
+          ...data,
+          productos: data.productos.map((producto) => ({
+            ...producto,
+            esDatosApi: true,
+          })),
+        });
+      } catch (error) {
+        if (error.name !== "AbortError") {
+          setErrorInventario(error.message);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setCargandoInventario(false);
+        }
+      }
+    };
+
+    cargarInventario();
+    return () => controller.abort();
+  }, [logueado, seccion, accessToken]);
+  // Estado inicial local que aún utilizan los flujos no conectados al API.
   const [productos, setProductos] = useState([
     {
       id: 1,
@@ -139,9 +236,6 @@ function App() {
   ]);
 
   const [busqueda, setBusqueda] = useState("");
-  const [busquedaVentas, setBusquedaVentas] = useState("");
-  const [busquedaCompras, setBusquedaCompras] = useState("");
-  const [busquedaGastos, setBusquedaGastos] = useState("");
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [productoEditando, setProductoEditando] = useState(null);
   const [productoInventarioSeleccionado, setProductoInventarioSeleccionado] =
@@ -150,9 +244,15 @@ function App() {
   const [nuevoProducto, setNuevoProducto] = useState({
     nombre: "",
     cantidad: "",
-    unidad: "unidad",
+    unidad: "und",
     precio: "",
+    perecible: null,
   });
+  // ===== INVENTORY FRONTEND: FIN =====
+
+  const [busquedaVentas, setBusquedaVentas] = useState("");
+  const [busquedaCompras, setBusquedaCompras] = useState("");
+  const [busquedaGastos, setBusquedaGastos] = useState("");
 
   // =========================
   // VENTAS
@@ -359,9 +459,9 @@ const abrirNuevoProducto = () => {
 
   setNuevoProducto({
     nombre: "",
-    unidad: "unidad",
+    unidad: "und",
     precio: "",
-    perecible: false,
+    perecible: null,
   });
 
   setMostrarFormulario(true);
@@ -374,9 +474,10 @@ const abrirNuevoProducto = () => {
     setProductoEditando(producto);
 
     setNuevoProducto({
-  nombre: producto.nombre,
-  unidad: producto.unidad,
-  precio: producto.precio,
+      nombre: producto.nombre,
+      unidad: producto.unidad,
+      precio: producto.precio,
+      perecible: producto.perecible ?? false,
 });
 
     setMostrarFormulario(true);
@@ -385,14 +486,15 @@ const abrirNuevoProducto = () => {
   // =========================
   // INVENTARIO - GUARDAR
   // =========================
-  const guardarProducto = (e) => {
+  const guardarProducto = async (e) => {
     e.preventDefault();
 
     if (
       !nuevoProducto.nombre ||
-      nuevoProducto.precio === ""
+      nuevoProducto.precio === "" ||
+      typeof nuevoProducto.perecible !== "boolean"
     ) {
-      alert("Completa todos los campos.");
+      alert("Completa todos los campos y selecciona si es perecible.");
       return;
     }
 
@@ -401,31 +503,94 @@ if (Number(nuevoProducto.precio) <= 0) {
   return;
 }
 if (productoEditando) {
-  setProductos(
-    productos.map((producto) =>
-      producto.id === productoEditando.id
-        ? {
-            ...producto,
+    try {
+      const response = await fetch(
+        `${API_URL}/inventario/${productoEditando.id}/`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
             nombre: nuevoProducto.nombre,
             unidad: nuevoProducto.unidad,
-            precio: Number(nuevoProducto.precio),
-            precioVenta: Number(nuevoProducto.precio),
-          }
-        : producto
-    )
-  );
-} else {
-  const nuevo = {
-    id: Date.now(),
-    nombre: nuevoProducto.nombre,
-    cantidad: 0,
-    unidad: nuevoProducto.unidad,
-    precio: Number(nuevoProducto.precio),
-    precioVenta: Number(nuevoProducto.precio),
-    perecible: false,
-  };
+            precio: nuevoProducto.precio,
+          }),
+        }
+      );
 
-  setProductos([...productos, nuevo]);
+      const data = await response.json();
+      if (!response.ok) {
+        alert(data.detail || "No se pudieron guardar los cambios.");
+        return;
+      }
+
+      setInventarioResumen((resumen) => ({
+        ...resumen,
+        productos: resumen.productos
+          .map((producto) =>
+            producto.id === data.id
+              ? { ...producto, ...data }
+              : producto
+          )
+          .sort((productoA, productoB) =>
+            productoA.nombre.localeCompare(productoB.nombre, "es")
+          ),
+      }));
+      setProductos((productosActuales) =>
+        productosActuales.map((producto) =>
+          producto.id === data.id
+            ? {
+                ...producto,
+                nombre: data.nombre,
+                unidad: data.unidad,
+                precio: data.precio,
+                precioVenta: data.precio,
+              }
+            : producto
+        )
+      );
+    } catch {
+      alert("No se pudo conectar con el servidor. Inténtalo de nuevo.");
+      return;
+    }
+} else {
+  try {
+    const response = await fetch(`${API_URL}/inventario/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        nombre: nuevoProducto.nombre,
+        unidad: nuevoProducto.unidad,
+        precio: nuevoProducto.precio,
+        perecible: nuevoProducto.perecible,
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      alert(data.detail || "No se pudo registrar el producto.");
+      return;
+    }
+
+    const nuevo = { ...data, esDatosApi: true };
+    setInventarioResumen((resumen) => ({
+      ...resumen,
+      total_productos: resumen.total_productos + 1,
+      stock_bajo:
+        resumen.stock_bajo + (nuevo.estado === "disponible" ? 0 : 1),
+      productos: [...resumen.productos, nuevo].sort((productoA, productoB) =>
+        productoA.nombre.localeCompare(productoB.nombre, "es")
+      ),
+    }));
+  } catch {
+    alert("No se pudo conectar con el servidor. Inténtalo de nuevo.");
+    return;
+  }
 }
 
     setMostrarFormulario(false);
@@ -433,8 +598,9 @@ if (productoEditando) {
     setNuevoProducto({
       nombre: "",
       cantidad: 0,
-      unidad: "unidad",
+      unidad: "und",
       precio: "",
+      perecible: null,
     });
 
     setProductoEditando(null);
@@ -455,7 +621,7 @@ if (productoEditando) {
     }
   };
 
-  const productosFiltrados = productos.filter((producto) =>
+  const productosFiltrados = inventarioResumen.productos.filter((producto) =>
     producto.nombre.toLowerCase().includes(busqueda.toLowerCase())
   );
 
@@ -653,8 +819,6 @@ if (productoEditando) {
       ((ventaB.idVenta ?? 0) - (ventaA.idVenta ?? 0))
     );
   });
-  const [ventasDashboard] = useState(() => ventasOrdenadas.slice(0, 5));
-
   const ventasFiltradas = ventasOrdenadas.filter((venta) =>
     [obtenerCodigoVenta(venta), venta.fecha, venta.producto, venta.tipo, venta.pago]
       .join(" ")
@@ -707,15 +871,19 @@ if (productoEditando) {
       0
     );
 
-  const obtenerLotesProducto = (producto) =>
-    (producto.lotes || []).map((lote) => ({
+  const obtenerLotesProducto = (producto) => {
+    const lotesRegistrados = (producto.lotes || []).map((lote) => ({
       ...lote,
       idProducto: producto.id,
       fechaCompra: lote.fechaCompra || lote.fecha,
       cantidadInicial: lote.cantidadInicial ?? lote.cantidad,
       cantidadActual: lote.cantidadActual ?? lote.cantidad,
       precioCompraUnitario: lote.precioCompraUnitario ?? lote.precioUnitario,
-    })).concat(
+    }));
+
+    if (producto.esDatosApi) return lotesRegistrados;
+
+    return lotesRegistrados.concat(
       compras
       .filter((compra) => obtenerEstadoCompra(compra) === "Entregado")
       .flatMap((compra) =>
@@ -727,6 +895,7 @@ if (productoEditando) {
             }))
       )
     );
+    };
 
   const siguienteLoteCompra =
     Math.max(
@@ -1090,6 +1259,8 @@ setCompras(
   // =========================
   // CÁLCULOS
   // =========================
+  const stockBajo = productos.filter((producto) => producto.cantidad <= 5);
+
   const totalVentas = ventas.reduce(
     (total, venta) => total + venta.total,
     0
@@ -1108,30 +1279,6 @@ setCompras(
   );
 
   const gananciaEstimada = totalVentas - totalCompras - totalGastos;
-
-  const stockBajo = productos.filter(
-    (producto) => producto.cantidad <= 5
-  );
-  // =========================
-  // DATOS PARA GRÁFICO DE VENTAS
-  // =========================
-  const ventasPorFecha = ventas.reduce((resultado, venta) => {
-    if (!resultado[venta.fecha]) {
-      resultado[venta.fecha] = 0;
-    }
-
-    resultado[venta.fecha] += venta.total;
-
-    return resultado;
-  }, {});
-
-  const ventasPorFechaRecientes = Object.entries(ventasPorFecha)
-    .sort(([fechaA], [fechaB]) => {
-      const fechaOrdenA = new Date(fechaA.split("/").reverse().join("-"));
-      const fechaOrdenB = new Date(fechaB.split("/").reverse().join("-"));
-      return fechaOrdenB - fechaOrdenA;
-    })
-    .slice(0, 5);
 
   const cambiarSeccion = (nuevaSeccion) => {
     setVentaSeleccionada(null);
@@ -1295,7 +1442,9 @@ setCompras(
 
                 <div>
                   <span>Total productos</span>
-                  <h2>{productos.length}</h2>
+                  <h2>
+                    {cargandoDashboard ? "..." : errorDashboard ? "--" : dashboardResumen.total_productos}
+                  </h2>
                 </div>
               </div>
 
@@ -1304,7 +1453,9 @@ setCompras(
 
                 <div>
                   <span>Stock bajo</span>
-                  <h2>{stockBajo.length}</h2>
+                  <h2>
+                    {cargandoDashboard ? "..." : errorDashboard ? "--" : dashboardResumen.productos_stock_bajo.length}
+                  </h2>
                 </div>
               </div>
 
@@ -1313,7 +1464,9 @@ setCompras(
 
                 <div>
                   <span>Ventas acumuladas</span>
-                  <h2>S/ {totalVentas.toFixed(2)}</h2>
+                  <h2>
+                    S/ {cargandoDashboard ? "..." : errorDashboard ? "--" : Number(dashboardResumen.ventas_acumuladas).toFixed(2)}
+                  </h2>
                 </div>
               </div>
 
@@ -1322,23 +1475,29 @@ setCompras(
 
                 <div>
                   <span>Ganancia estimada</span>
-                  <h2>S/ {gananciaEstimada.toFixed(2)}</h2>
+                  <h2>
+                    S/ {cargandoDashboard ? "..." : errorDashboard ? "--" : Number(dashboardResumen.ganancia_estimada).toFixed(2)}
+                  </h2>
                 </div>
               </div>
 
             </div>
+            {errorDashboard && <p role="alert">{errorDashboard}</p>}
                       <div className="content-card sales-chart-card">
 
             <h3>Ventas por fecha</h3>
 
             <div className="sales-chart">
 
-              {ventasPorFechaRecientes.map(
-                ([fecha, total]) => {
-
-                  const porcentaje =
-                    (total / Math.max(...ventasPorFechaRecientes.map(([, valor]) => valor))) *
-                    100;
+              {dashboardResumen.ventas_por_fecha.length === 0 ? (
+                <p>No hay ventas registradas.</p>
+              ) : (
+                dashboardResumen.ventas_por_fecha.map(({ fecha, total }) => {
+                  const maximo = Math.max(
+                    ...dashboardResumen.ventas_por_fecha.map((venta) => venta.total),
+                    1
+                  );
+                  const porcentaje = (total / maximo) * 100;
 
                   return (
                     <div className="chart-item" key={fecha}>
@@ -1363,7 +1522,7 @@ setCompras(
 
                     </div>
                   );
-                }
+                })
               )}
 
             </div>
@@ -1375,18 +1534,20 @@ setCompras(
 
                 <h3>Ventas recientes</h3>
 
-                {ventasDashboard.map((venta) => (
-                  <div className="sale-row" key={venta.idVenta ?? venta.id}>
-                    <span>
-                      Venta {obtenerCodigoVenta(venta)} -{" "}
-                      {venta.producto}
-                    </span>
-
-                    <strong>
-                      S/ {venta.total.toFixed(2)}
-                    </strong>
-                  </div>
-                ))}
+                {dashboardResumen.ventas_recientes.length === 0 ? (
+                  <p>No hay ventas registradas.</p>
+                ) : (
+                  dashboardResumen.ventas_recientes.map((venta) => (
+                    <div className="sale-row" key={venta.id}>
+                      <span>
+                        Venta VT-{venta.id} · {Number(venta.cantidad_productos).toLocaleString("es-PE", {
+                          maximumFractionDigits: 3,
+                        })} productos
+                      </span>
+                      <strong>S/ {Number(venta.total).toFixed(2)}</strong>
+                    </div>
+                  ))
+                )}
 
               </div>
 
@@ -1394,18 +1555,21 @@ setCompras(
 
                 <h3>Productos con stock bajo</h3>
 
-                {stockBajo.length === 0 ? (
+                {dashboardResumen.productos_stock_bajo.length === 0 ? (
                   <p>Todos los productos tienen stock suficiente.</p>
                 ) : (
-                  stockBajo.map((producto) => (
-                    <div
-                      className="sale-row"
-                      key={producto.id}
-                    >
-                      <span>{producto.nombre}</span>
-                      <strong>{producto.cantidad}</strong>
-                    </div>
-                  ))
+                  <div className="low-stock-list">
+                    {dashboardResumen.productos_stock_bajo.map((producto) => (
+                      <div className="sale-row" key={producto.id}>
+                        <span>{producto.nombre}</span>
+                        <strong>
+                          {Number(producto.cantidad).toLocaleString("es-PE", {
+                            maximumFractionDigits: 3,
+                          })}
+                        </strong>
+                      </div>
+                    ))}
+                  </div>
                 )}
 
               </div>
@@ -1414,7 +1578,8 @@ setCompras(
           </>
         )}
 
-        {/* ================= INVENTARIO ================= */}
+        {/* ===== INVENTARIO UI: INICIO ===== */}
+        {/* Renderiza resumen, productos, existencias, estados y acciones del módulo. */}
         {seccion === "inventario" && (
           <>
             <div className="page-header">
@@ -1437,15 +1602,20 @@ setCompras(
 
               <div className="summary-card">
                 <span>Total de productos</span>
-                <strong>{productos.length}</strong>
+                <strong>
+                  {cargandoInventario ? "..." : errorInventario ? "--" : inventarioResumen.total_productos}
+                </strong>
               </div>
 
               <div className="summary-card warning">
                 <span>Stock bajo</span>
-                <strong>{stockBajo.length}</strong>
+                <strong>
+                  {cargandoInventario ? "..." : errorInventario ? "--" : inventarioResumen.stock_bajo}
+                </strong>
               </div>
 
             </div>
+            {errorInventario && <p role="alert">{errorInventario}</p>}
 
             <div className="content-card inventory-card">
 
@@ -1469,7 +1639,7 @@ setCompras(
                   <thead>
                     <tr>
                       <th>Producto</th>
-                      <th>Precio</th>
+                      <th>Precio de venta</th>
                       <th>Cantidad de lotes</th>
                       <th>Cantidad actual</th>
                       <th>Estado</th>
@@ -1488,20 +1658,23 @@ setCompras(
                         </td>
 
                         <td>
-                          S/ {producto.precio.toFixed(2)}
+                          S/ {Number(producto.precio).toFixed(2)}
                         </td>
 
-                        <td>{obtenerLotesProducto(producto).length}</td>
-
-                        <td>{producto.cantidad}</td>
+                        <td>{producto.cantidad_lotes}</td>
 
                         <td>
+                          {Number(producto.cantidad).toLocaleString("es-PE", {
+                            maximumFractionDigits: 3,
+                          })} {producto.unidad}
+                        </td>
 
-                          {producto.cantidad === 0 ? (
+                        <td>
+                          {producto.estado === "sin_stock" ? (
                             <span className="status-badge out-of-stock">
                               Sin stock
                             </span>
-                          ) : producto.cantidad <= 5 ? (
+                          ) : producto.estado === "stock_bajo" ? (
                             <span className="status-badge low">
                               Stock bajo
                             </span>
@@ -1547,7 +1720,13 @@ setCompras(
 
                 </table>
 
-                {productosFiltrados.length === 0 && (
+                {cargandoInventario && (
+                  <div className="empty-state">
+                    <p>Cargando inventario...</p>
+                  </div>
+                )}
+
+                {!cargandoInventario && !errorInventario && productosFiltrados.length === 0 && (
                   <div className="empty-state">
                     <div>📦</div>
                     <h3>No se encontraron productos</h3>
@@ -1560,6 +1739,8 @@ setCompras(
             </div>
           </>
         )}
+
+        {/* ===== INVENTARIO UI: FIN ===== */}
 
         {/* ================= VENTAS ================= */}
         {seccion === "ventas" && (
@@ -2030,10 +2211,11 @@ setCompras(
                       })
                     }
                   >
-                    <option value="unidad">Unidad</option>
+                    <option value="und">Unidad</option>
                     <option value="kg">Kilogramo</option>
                     <option value="caja">Caja</option>
-                    <option value="paquete">Paquete</option>
+                    <option value="pqte">Paquete</option>
+                    <option value="lata">Lata</option>
                   </select>
 
                 </div>
@@ -2059,6 +2241,30 @@ setCompras(
                 />
 
               </div>
+
+              {!productoEditando && (
+                <div className="form-group">
+                  <label htmlFor="nuevo-producto-perecible">¿Es perecible?</label>
+                  <select
+                    id="nuevo-producto-perecible"
+                    value={
+                      nuevoProducto.perecible === null
+                        ? ""
+                        : String(nuevoProducto.perecible)
+                    }
+                    onChange={(e) =>
+                      setNuevoProducto({
+                        ...nuevoProducto,
+                        perecible: e.target.value === "" ? null : e.target.value === "true",
+                      })
+                    }
+                  >
+                    <option value="">Selecciona una opción</option>
+                    <option value="true">Sí, es perecible</option>
+                    <option value="false">No es perecible</option>
+                  </select>
+                </div>
+              )}
 
               <div className="modal-actions">
 
@@ -2406,6 +2612,9 @@ setCompras(
             </div>
 
             <div className="sale-details-table-container">
+              <p>
+                Producto perecible: {productoInventarioSeleccionado.perecible ? "Sí" : "No"}
+              </p>
               <table className="sale-details-table">
                 <thead>
                   <tr>
@@ -2553,10 +2762,15 @@ setCompras(
                         <td>{lote.ordenCompra}</td>
                         <td>{obtenerCodigoLote(lote)}</td>
                         <td>{lote.producto}</td>
-                        <td>{productoInventarioSeleccionado.unidad}</td>
+                        <td>{productoInventarioSeleccionado.unidad_nombre}</td>
                         <td>{lote.cantidadActual}</td>
                         <td>{lote.fecha}</td>
-                        <td>{lote.fechaVencimiento || "---"}</td>
+                        <td>
+                          {lote.fechaVencimiento ||
+                            (productoInventarioSeleccionado.perecible
+                              ? "Pendiente"
+                              : "No aplica")}
+                        </td>
                       </tr>
                     ))
                   ) : (

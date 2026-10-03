@@ -48,13 +48,21 @@ Aplicacion de gestion con frontend React/Vite y backend Django REST Framework.
 	.\.venv\Scripts\python.exe manage.py migrate
 	```
 
+	En bases existentes, haz primero un respaldo: esta migracion de datos no es reversible. Mueve las referencias de compras, ventas y gastos a usuarios de Django Auth; conserva las cuentas anteriores como cuentas archivadas e inactivas, crea grupos a partir de los roles y vacia las tablas `usuarios` y `roles`. Las cuentas archivadas no permiten iniciar sesion.
+
 8. Instala las dependencias del frontend:
 
 	```powershell
 	npm ci
 	```
 
-9. Crea o solicita de forma segura una cuenta de aplicacion en la tabla `usuarios`. `createsuperuser` crea una cuenta Django distinta y no sirve para el login de Rapid Market.
+9. Cuando quieras habilitar el acceso, crea la cuenta administradora de Django Auth:
+
+	```powershell
+	.\.venv\Scripts\python.exe manage.py createsuperuser
+	```
+
+	La cuenta debe ser superusuario para tener acceso completo al API y al panel de Django. Los grupos y permisos del API se administran desde el panel de Django.
 
 ## Ejecutar el sistema
 

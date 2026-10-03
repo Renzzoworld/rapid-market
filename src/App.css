@@ -338,6 +338,25 @@ body {
   color: #2563eb;
 }
 
+.low-stock-list {
+  max-height: 208px;
+  overflow-y: auto;
+  padding-right: 8px;
+  scrollbar-gutter: stable;
+}
+
+.low-stock-list .sale-row {
+  box-sizing: border-box;
+  height: 52px;
+  overflow: hidden;
+}
+
+.low-stock-list .sale-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* =========================
    BOTONES
    ========================= */
