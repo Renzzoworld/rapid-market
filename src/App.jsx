@@ -15,6 +15,7 @@ function App() {
   const [tipoReporte, setTipoReporte] = useState("ventas");
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
+  const [reporteGenerado, setReporteGenerado] = useState(false);
 
   // =========================
   // INVENTARIO
@@ -389,6 +390,25 @@ if (productoEditando) {
         : producto
     )
   );
+
+  // Conservar el vínculo de los lotes al producto aunque cambie su nombre.
+  setLotesIniciales((lotes) =>
+    lotes.map((lote) =>
+      lote.producto === productoEditando.nombre
+        ? { ...lote, idProducto: productoEditando.id }
+        : lote
+    )
+  );
+  setCompras((comprasActuales) =>
+    comprasActuales.map((compra) => ({
+      ...compra,
+      lotes: (compra.lotes || []).map((lote) =>
+        lote.producto === productoEditando.nombre
+          ? { ...lote, idProducto: productoEditando.id }
+          : lote
+      ),
+    }))
+  );
 } else {
   const nuevo = {
     id: Date.now(),
@@ -681,37 +701,116 @@ if (productoEditando) {
       (total, lote) => total + lote.precioUnitario * lote.cantidad,
       0
     );
-
+const [lotesIniciales, setLotesIniciales] = useState([
+  {
+    idCompra: "INICIAL",
+    idLote: 5,
+    producto: "Papel higiénico",
+    unidad: "paquete",
+    fechaCompra: "01/09/2026",
+    cantidadInicial: 5,
+    cantidadActual: 5,
+    precioCompraUnitario: 12.0,
+    precioUnitario: 12.0,
+    perecible: false,
+    fechaVencimiento: "",
+  },
+  {
+    idCompra: "INICIAL",
+    idLote: 6,
+    producto: "Fideos",
+    unidad: "paquete",
+    fechaCompra: "01/09/2026",
+    cantidadInicial: 15,
+    cantidadActual: 15,
+    precioCompraUnitario: 3.5,
+    precioUnitario: 3.5,
+    perecible: true,
+    fechaVencimiento: "",
+  },
+  {
+    idCompra: "INICIAL",
+    idLote: 7,
+    producto: "Carbón",
+    unidad: "kg",
+    fechaCompra: "01/09/2026",
+    cantidadInicial: 15,
+    cantidadActual: 15,
+    precioCompraUnitario: 5.0,
+    precioUnitario: 5.0,
+    perecible: false,
+    fechaVencimiento: "",
+  },
+]);
   const obtenerLotesProducto = (producto) =>
-    (producto.lotes || []).map((lote) => ({
+  (producto.lotes || [])
+    .map((lote) => ({
       ...lote,
       idProducto: producto.id,
       fechaCompra: lote.fechaCompra || lote.fecha,
       cantidadInicial: lote.cantidadInicial ?? lote.cantidad,
       cantidadActual: lote.cantidadActual ?? lote.cantidad,
-      precioCompraUnitario: lote.precioCompraUnitario ?? lote.precioUnitario,
-    })).concat(
+      precioCompraUnitario:
+        lote.precioCompraUnitario ?? lote.precioUnitario,
+    }))
+    .concat(
+      lotesIniciales
+    .filter(
+      (lote) =>
+        lote.idProducto === producto.id ||
+        (!lote.idProducto && lote.producto === producto.nombre)
+    )
+    .map((lote) => ({
+      ...lote,
+      idProducto: producto.id,
+      fechaCompra: lote.fechaCompra || lote.fecha,
+      cantidadInicial: lote.cantidadInicial ?? lote.cantidad,
+      cantidadActual: lote.cantidadActual ?? lote.cantidad,
+      precioCompraUnitario:
+        lote.precioCompraUnitario ?? lote.precioUnitario,
+      ordenCompra: "Inventario inicial",
+    }))
+)
+    .concat(
       compras
-      .filter((compra) => obtenerEstadoCompra(compra) === "Entregado")
-      .flatMap((compra) =>
-        obtenerLotesCompra(compra)
-          .filter((lote) => lote.producto === producto.nombre)
+        .filter(
+          (compra) => obtenerEstadoCompra(compra) === "Entregado"
+        )
+        .flatMap((compra) =>
+          obtenerLotesCompra(compra)
+            .filter(
+              (lote) =>
+                lote.idProducto === producto.id ||
+                (!lote.idProducto && lote.producto === producto.nombre)
+            )
             .map((lote) => ({
-              ...prepararLoteInventario(lote, compra, producto),
+              ...prepararLoteInventario(
+                lote,
+                compra,
+                producto
+              ),
               ordenCompra: obtenerCodigoCompra(compra),
             }))
-      )
+        )
     );
 
   const siguienteLoteCompra =
-    Math.max(
+  Math.max(
+    ...[
+      ...lotesIniciales.map((lote) =>
+        Number(String(lote.idLote).replace("LT-", ""))
+      ),
+
       ...compras.flatMap((compraRegistrada) =>
         obtenerLotesCompra(compraRegistrada).map((lote) =>
-          lote.idLote ?? Number(String(lote.id).replace("LT-", ""))
+          Number(
+            String(lote.idLote ?? lote.id).replace("LT-", "")
+          )
         )
       ),
-      0
-    ) + 1;
+    ],
+    0
+  ) + 1;
 
   // =========================
   // VENTAS - REGISTRAR
@@ -793,48 +892,77 @@ carritoVenta.forEach((item) => {
   cantidadesRestantes[item.id] = item.cantidad;
 });
 
-// Obtener todos los lotes entregados y ordenarlos del más antiguo al más reciente
-const lotesDisponibles = compras
-  .filter((compra) => obtenerEstadoCompra(compra) === "Entregado")
-  .flatMap((compra) =>
-    (compra.lotes || []).map((lote) => ({
-      idCompra: compra.idCompra,
-      idLote: lote.idLote,
-      producto: lote.producto,
-      fechaCompra: lote.fechaCompra || lote.fecha,
-      cantidadActual: Number(
-        lote.cantidadActual ?? lote.cantidad ?? 0
-      ),
-    }))
-  )
-  .sort((a, b) => {
-    const fechaA = new Date(
-      a.fechaCompra.split("/").reverse().join("-")
-    );
+// Obtener todos los lotes disponibles:
+// 1. Inventario inicial
+// 2. Compras entregadas
+const lotesDisponibles = [
+  ...lotesIniciales.map((lote) => ({
+    ...lote,
+    tipoLote: "Inicial",
+    idProducto:
+      lote.idProducto ??
+      productos.find((producto) => producto.nombre === lote.producto)?.id ??
+      null,
+    fechaCompra: lote.fechaCompra || lote.fecha,
+    cantidadActual: Number(
+      lote.cantidadActual ?? lote.cantidad ?? 0
+    ),
+  })),
 
-    const fechaB = new Date(
-      b.fechaCompra.split("/").reverse().join("-")
-    );
+  ...compras
+    .filter(
+      (compra) => obtenerEstadoCompra(compra) === "Entregado"
+    )
+    .flatMap((compra) =>
+      (compra.lotes || []).map((lote) => ({
+        ...lote,
+        tipoLote: "Compra",
+        idCompra: compra.idCompra,
+        idProducto:
+          lote.idProducto ??
+          productos.find((producto) => producto.nombre === lote.producto)?.id ??
+          null,
+        fechaCompra: lote.fechaCompra || lote.fecha,
+        cantidadActual: Number(
+          lote.cantidadActual ?? lote.cantidad ?? 0
+        ),
+      }))
+    ),
+].sort((a, b) => {
+  const fechaA = new Date(
+    a.fechaCompra.split("/").reverse().join("-")
+  );
 
-    const diferenciaFecha = fechaA - fechaB;
+  const fechaB = new Date(
+    b.fechaCompra.split("/").reverse().join("-")
+  );
 
-    if (diferenciaFecha !== 0) {
-      return diferenciaFecha;
-    }
+  const diferenciaFecha = fechaA - fechaB;
 
-    return (
-      Number(String(a.idCompra).replace("CPA-", "")) -
-      Number(String(b.idCompra).replace("CPA-", ""))
-    );
-  });
+  if (diferenciaFecha !== 0) {
+    return diferenciaFecha;
+  }
+
+  // Para lotes de compra usamos el número de CPA.
+  // Para lotes iniciales usamos el número de LT.
+  const numeroA =
+    a.tipoLote === "Compra"
+      ? Number(String(a.idCompra).replace("CPA-", ""))
+      : Number(String(a.idLote).replace("LT-", ""));
+
+  const numeroB =
+    b.tipoLote === "Compra"
+      ? Number(String(b.idCompra).replace("CPA-", ""))
+      : Number(String(b.idLote).replace("LT-", ""));
+
+  return numeroA - numeroB;
+});
 
 // Determinar cuánto descontar de cada lote
 const descuentosPorLote = {};
 
 lotesDisponibles.forEach((lote) => {
-  const producto = productos.find(
-    (p) => p.nombre === lote.producto
-  );
+  const producto = productos.find((p) => p.id === lote.idProducto);
 
   if (!producto) {
     return;
@@ -856,18 +984,39 @@ lotesDisponibles.forEach((lote) => {
   );
 
   descuentosPorLote[
-    `${lote.idCompra}-${lote.idLote}`
+    `${lote.tipoLote}-${lote.idCompra ?? "INICIAL"}-${lote.idLote}`
   ] = cantidadDescontar;
 
   cantidadesRestantes[producto.id] -= cantidadDescontar;
 });
 
-// Aplicar los descuentos a los lotes correspondientes
+// Actualizar lotes de inventario inicial
+setLotesIniciales(
+  lotesIniciales.map((lote) => {
+    const clave = `Inicial-INICIAL-${lote.idLote}`;
+    const descuento = descuentosPorLote[clave] || 0;
+
+    if (descuento === 0) {
+      return lote;
+    }
+
+    const cantidadActual = Number(
+      lote.cantidadActual ?? lote.cantidad ?? 0
+    );
+
+    return {
+      ...lote,
+      cantidadActual: cantidadActual - descuento,
+    };
+  })
+);
+
+// Actualizar lotes provenientes de compras
 setCompras(
   compras.map((compra) => ({
     ...compra,
     lotes: (compra.lotes || []).map((lote) => {
-      const clave = `${compra.idCompra}-${lote.idLote}`;
+      const clave = `Compra-${compra.idCompra}-${lote.idLote}`;
       const descuento = descuentosPorLote[clave] || 0;
 
       if (descuento === 0) {
@@ -885,7 +1034,6 @@ setCompras(
     }),
   }))
 );
-
     setNuevaVenta({
       productoId: "",
       cantidad: 1,
@@ -918,14 +1066,22 @@ setCompras(
         0
       ) + 1;
     const siguienteLote =
-      Math.max(
-        ...compras.flatMap((compraRegistrada) =>
-          obtenerLotesCompra(compraRegistrada).map((lote) =>
-            lote.idLote ?? Number(String(lote.id).replace("LT-", ""))
+  Math.max(
+    ...[
+      ...lotesIniciales.map((lote) =>
+        Number(String(lote.idLote).replace("LT-", ""))
+      ),
+
+      ...compras.flatMap((compraRegistrada) =>
+        obtenerLotesCompra(compraRegistrada).map((lote) =>
+          Number(
+            String(lote.idLote ?? lote.id).replace("LT-", "")
           )
-        ),
-        0
-      ) + 1;
+        )
+      ),
+    ],
+    0
+  ) + 1;
     const fecha = new Date().toLocaleDateString("es-PE");
     const compra = {
       idCompra: siguienteOrden,
@@ -999,7 +1155,9 @@ setCompras(
     setProductos(
       productos.map((producto) => {
         const lotesProducto = lotes.filter(
-          (lote) => lote.producto === producto.nombre
+          (lote) =>
+            lote.idProducto === producto.id ||
+            (!lote.idProducto && lote.producto === producto.nombre)
         );
         const cantidadAgregada = lotesProducto.reduce(
           (total, lote) => total + lote.cantidad,
@@ -1107,6 +1265,23 @@ setCompras(
       return fechaOrdenB - fechaOrdenA;
     })
     .slice(0, 5);
+
+  const fechaEnRangoReporte = (fecha) => {
+    const [dia, mes, anio] = (fecha || "").split("/");
+    const fechaISO = `${anio}-${(mes || "").padStart(2, "0")}-${(dia || "").padStart(2, "0")}`;
+    return (!fechaDesde || fechaISO >= fechaDesde) &&
+      (!fechaHasta || fechaISO <= fechaHasta);
+  };
+
+  const ventasReporte = ventas.filter((venta) => fechaEnRangoReporte(venta.fecha));
+  const comprasReporte = compras.filter((compra) => fechaEnRangoReporte(compra.fecha));
+  const gastosReporte = gastos.filter((gasto) => fechaEnRangoReporte(gasto.fecha));
+  const totalVentasReporte = ventasReporte.reduce((total, venta) => total + venta.total, 0);
+  const totalComprasReporte = comprasReporte.reduce(
+    (total, compra) => total + (obtenerEstadoCompra(compra) === "Entregado" ? compra.costo : 0),
+    0
+  );
+  const totalGastosReporte = gastosReporte.reduce((total, gasto) => total + gasto.monto, 0);
 
   const cambiarSeccion = (nuevaSeccion) => {
     setVentaSeleccionada(null);
@@ -1928,16 +2103,89 @@ setCompras(
                     setTipoReporte("ventas");
                     setFechaDesde("");
                     setFechaHasta("");
+                    setReporteGenerado(false);
                   }}>
                     Limpiar
                   </button>
 
-                  <button type="button" className="primary-button">
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={() => setReporteGenerado(true)}
+                  >
                     Generar reporte
                   </button>
                 </div>
               </div>
             </div>
+
+            {reporteGenerado && (
+              <div className="content-card reports-results">
+                <h2>Resultado del reporte</h2>
+                <p>
+                  {tipoReporte === "productos"
+                    ? "Resumen del inventario actual"
+                    : `Periodo: ${fechaDesde || "Desde el inicio"} — ${fechaHasta || "Hasta hoy"}`}
+                </p>
+
+                {tipoReporte === "ganancias" ? (
+                  <div className="stats-grid">
+                    <div className="summary-card">
+                      <span>Ventas</span>
+                      <strong>S/ {totalVentasReporte.toFixed(2)}</strong>
+                    </div>
+                    <div className="summary-card">
+                      <span>Compras entregadas</span>
+                      <strong>S/ {totalComprasReporte.toFixed(2)}</strong>
+                    </div>
+                    <div className="summary-card">
+                      <span>Gastos</span>
+                      <strong>S/ {totalGastosReporte.toFixed(2)}</strong>
+                    </div>
+                    <div className="summary-card">
+                      <span>Ganancia estimada</span>
+                      <strong>S/ {(totalVentasReporte - totalComprasReporte - totalGastosReporte).toFixed(2)}</strong>
+                    </div>
+                  </div>
+                ) : tipoReporte === "productos" ? (
+                  <div className="table-container">
+                    <table>
+                      <thead><tr><th>Producto</th><th>Stock</th><th>Unidad</th><th>Precio de venta</th></tr></thead>
+                      <tbody>
+                        {productos.map((producto) => (
+                          <tr key={producto.id}>
+                            <td>{producto.nombre}</td>
+                            <td>{producto.cantidad}</td>
+                            <td>{producto.unidad}</td>
+                            <td>S/ {Number(producto.precio).toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="table-container">
+                    <table>
+                      <thead><tr><th>Fecha</th><th>Detalle</th><th>Monto</th></tr></thead>
+                      <tbody>
+                        {(tipoReporte === "ventas"
+                          ? ventasReporte.map((venta) => ({ fecha: venta.fecha, detalle: venta.productos?.map((producto) => producto.nombre).join(", ") || venta.producto, monto: venta.total }))
+                          : tipoReporte === "compras"
+                            ? comprasReporte.map((compra) => ({ fecha: compra.fecha, detalle: compra.proveedor, monto: compra.costo, estado: obtenerEstadoCompra(compra) }))
+                            : gastosReporte.map((gasto) => ({ fecha: gasto.fecha, detalle: `${gasto.descripcion} (${gasto.categoria})`, monto: gasto.monto }))
+                        ).map((fila, indice) => (
+                          <tr key={`${fila.fecha}-${indice}`}>
+                            <td>{fila.fecha}</td>
+                            <td>{fila.detalle}{fila.estado ? ` — ${fila.estado}` : ""}</td>
+                            <td>S/ {Number(fila.monto).toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
 
@@ -2540,7 +2788,7 @@ setCompras(
                         <td>{lote.producto}</td>
                         <td>{productoInventarioSeleccionado.unidad}</td>
                         <td>{lote.cantidadActual}</td>
-                        <td>{lote.fecha}</td>
+                        <td>{lote.fechaCompra || lote.fecha || "---"}</td>
                         <td>{lote.fechaVencimiento || "---"}</td>
                       </tr>
                     ))
