@@ -372,6 +372,24 @@ body {
   background: #f9fafb;
 }
 
+.provider-create-row {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.provider-create-row input {
+  min-width: 0;
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+}
+
+.provider-create-row button {
+  padding: 10px 14px;
+}
+
 /* =========================
    RESUMEN INVENTARIO
    ========================= */
@@ -1196,4 +1214,9 @@ body {
   background: #2563eb;
   border-radius: 10px;
   transition: width 0.4s ease;
+}
+
+.form-group label input[type="checkbox"] {
+  width: auto;
+  margin-right: 8px;
 }

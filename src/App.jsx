@@ -11,7 +11,100 @@ function App() {
   const [usuario, setUsuario] = useState("");
   const [password, setPassword] = useState("");
   const [errorLogin, setErrorLogin] = useState("");
-  const [_accessToken, setAccessToken] = useState("");
+  const [accessToken, setAccessToken] = useState("");
+  const [refreshToken, setRefreshToken] = useState("");
+  const [rol, setRol] = useState("");
+  const esAdministrador = ["admin", "administrador"].includes(rol.trim().toLowerCase());
+
+  const apiRequest = async (path, options = {}, token = accessToken) => {
+    let response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers: {
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers,
+      },
+    });
+    if (response.status === 401 && refreshToken && path !== "/login/refresh/") {
+      const renewed = await fetch(`${API_URL}/login/refresh/`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh: refreshToken }),
+      });
+      if (renewed.ok) {
+        const tokens = await renewed.json();
+        setAccessToken(tokens.access);
+        if (tokens.refresh) setRefreshToken(tokens.refresh);
+        response = await fetch(`${API_URL}${path}`, {
+          ...options,
+          headers: {
+            ...(options.body ? { "Content-Type": "application/json" } : {}),
+            Authorization: `Bearer ${tokens.access}`,
+            ...options.headers,
+          },
+        });
+      }
+    }
+    if (response.status === 204) return null;
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const detail = data.detail || Object.values(data).flat().join(" ") || "No se pudo completar la operación.";
+      throw new Error(detail);
+    }
+    return data;
+  };
+
+  const fechaVista = (value) => value ? new Date(value).toLocaleDateString("es-PE") : "";
+
+  const cargarDatos = async (token) => {
+    const data = await apiRequest("/dashboard/", {}, token);
+    setCatalogos(data.references);
+    setProveedores(data.references.providers.map((provider) => provider.name));
+    setProductos(data.products.map((product) => ({
+      id: product.id, nombre: product.name, cantidad: Number(product.stock),
+      unidad: product.unit_abbr, unidadId: product.unit_id,
+      precio: Number(product.price), precioVenta: Number(product.price),
+      perecible: product.perishable, activo: product.active,
+    })));
+    setVentas(data.sales.map((sale) => ({
+      idVenta: sale.id, fecha: fechaVista(sale.fecha), tipo: sale.type,
+      pago: sale.payment, total: Number(sale.total), cantidad: Number(sale.quantity),
+      costoVendido: Number(sale.cost_of_goods_sold), costoCompleto: sale.cost_data_complete,
+      productos: sale.items.map((item) => ({ id: item.product_id, nombre: item.name, cantidad: Number(item.quantity), precio: Number(item.price) })),
+      producto: sale.items[0]?.name || "Venta", cantidadProductos: sale.items.length,
+    })));
+    setCompras(data.purchases.map((purchase) => ({
+      idCompra: purchase.id, fecha: fechaVista(purchase.fecha), proveedor: purchase.provider,
+      costo: Number(purchase.total), estado: purchase.state,
+      lotes: purchase.items.map((item) => ({
+        idLote: item.lot_id, idDetalle: item.detail_id, idProducto: item.product_id,
+        fecha: fechaVista(purchase.fecha), producto: item.name, cantidad: Number(item.quantity),
+        cantidadInicial: Number(item.quantity), cantidadActual: Number(item.current_quantity),
+        precioUnitario: Number(item.unit_price), precioCompraUnitario: Number(item.unit_price),
+        subtotal: Number(item.quantity) * Number(item.unit_price), perecible: item.perishable,
+        fechaVencimiento: fechaVista(item.expiry_date),
+      })),
+    })));
+    setGastos(data.expenses.map((expense) => ({
+      id: expense.id, fecha: fechaVista(expense.fecha), descripcion: expense.description,
+      categoria: expense.category, categoriaId: expense.category_id, monto: Number(expense.amount),
+    })));
+  };
+
+  const guardarProveedor = async () => {
+    const name = nombreProveedorNuevo.trim();
+    if (!name) { alert("Escribe el nombre del proveedor."); return; }
+    try {
+      const provider = await apiRequest("/providers/", {
+        method: "POST", body: JSON.stringify({ name }),
+      });
+      setCatalogos((current) => ({ ...current, providers: [...current.providers, provider] }));
+      setProveedores((current) => [...current, provider.name]);
+      setNuevaCompra((current) => ({ ...current, proveedor: provider.name }));
+      setBusquedaProveedorCompra(provider.name);
+      setNombreProveedorNuevo("");
+      setMostrarProveedorNuevo(false);
+    } catch (error) { alert(error.message); }
+  };
 
   // Envia las credenciales a Django y abre la aplicacion si recibe un JWT.
   const iniciarSesion = async (e) => {
@@ -32,16 +125,24 @@ function App() {
 
       const data = await response.json();
       setAccessToken(data.access);
+      setRefreshToken(data.refresh);
+      setRol(data.user.role);
+      await cargarDatos(data.access);
       setLogueado(true);
-    } catch {
-      setErrorLogin("No se pudo conectar con el servidor. Inténtalo de nuevo.");
+    } catch (error) {
+      setErrorLogin(error.message || "No se pudo conectar con el servidor. Inténtalo de nuevo.");
     }
   };
 
   // Limpia la sesion local y devuelve al formulario de acceso.
-  const cerrarSesion = () => {
+  const cerrarSesion = async () => {
+    try {
+      if (refreshToken) await apiRequest("/logout/", { method: "POST", body: JSON.stringify({ refresh: refreshToken }) });
+    } catch { /* Se limpia la sesión local incluso si el servidor no responde. */ }
     setLogueado(false);
     setAccessToken("");
+    setRefreshToken("");
+    setRol("");
     setUsuario("");
     setPassword("");
     setSeccion("inicio");
@@ -54,89 +155,12 @@ function App() {
   const [tipoReporte, setTipoReporte] = useState("ventas");
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
+  const [reporte, setReporte] = useState(null);
 
   // =========================
   // INVENTARIO
   // =========================
-  const [productos, setProductos] = useState([
-    {
-      id: 1,
-      nombre: "Arroz Faraón",
-      cantidad: 20,
-      unidad: "kg",
-      precio: 5.5,
-      precioCompra: 4.5,
-      precioVenta: 5.5,
-      perecible: true,
-      lotes: [],
-    },
-    {
-      id: 2,
-      nombre: "Azúcar rubia",
-      cantidad: 8,
-      unidad: "kg",
-      precio: 5.2,
-      precioCompra: 4.2,
-      precioVenta: 5.2,
-      perecible: true,
-      lotes: [],
-    },
-    {
-      id: 3,
-      nombre: "Leche",
-      cantidad: 22,
-      unidad: "unidad",
-      precio: 5.0,
-      precioCompra: 4.0,
-      precioVenta: 5.0,
-      perecible: true,
-      lotes: [],
-    },
-    {
-      id: 4,
-      nombre: "Bolsas de basura",
-      cantidad: 2,
-      unidad: "paquete",
-      precio: 9.0,
-      precioCompra: 8.0,
-      precioVenta: 9.0,
-      perecible: false,
-      lotes: [],
-    },
-    {
-      id: 5,
-      nombre: "Papel higiénico",
-      cantidad: 5,
-      unidad: "paquete",
-      precio: 13.0,
-      precioCompra: 12.0,
-      precioVenta: 13.0,
-      perecible: false,
-      lotes: [],
-    },
-    {
-      id: 6,
-      nombre: "Fideos",
-      cantidad: 15,
-      unidad: "paquete",
-      precio: 4.5,
-      precioCompra: 3.5,
-      precioVenta: 4.5,
-      perecible: true,
-      lotes: [],
-    },
-    {
-      id: 7,
-      nombre: "Carbón",
-      cantidad: 15,
-      unidad: "kg",
-      precio: 6.0,
-      precioCompra: 5.0,
-      precioVenta: 6.0,
-      perecible: false,
-      lotes: [],
-    },
-  ]);
+  const [productos, setProductos] = useState([]);
 
   const [busqueda, setBusqueda] = useState("");
   const [busquedaVentas, setBusquedaVentas] = useState("");
@@ -157,44 +181,7 @@ function App() {
   // =========================
   // VENTAS
   // =========================
-  const [ventas, setVentas] = useState([
-    {
-      idVenta: 4,
-      fecha: "11/09/2026",
-      producto: "Azúcar rubia",
-      cantidad: 17,
-      tipo: "Minorista",
-      pago: "Efectivo",
-      total: 88.4,
-    },
-    {
-      idVenta: 3,
-      fecha: "10/09/2026",
-      producto: "Fideos",
-      cantidad: 10,
-      tipo: "Mayorista",
-      pago: "Plin",
-      total: 42.75,
-    },
-    {
-      idVenta: 2,
-      fecha: "09/09/2026",
-      producto: "Leche",
-      cantidad: 3,
-      tipo: "Minorista",
-      pago: "Efectivo",
-      total: 15.0,
-    },
-    {
-      idVenta: 1,
-      fecha: "08/09/2026",
-      producto: "Arroz Faraón",
-      cantidad: 5,
-      tipo: "Minorista",
-      pago: "Yape",
-      total: 27.5,
-    },
-  ]);
+  const [ventas, setVentas] = useState([]);
 
   const [mostrarVenta, setMostrarVenta] = useState(false);
 
@@ -211,107 +198,17 @@ function App() {
   // =========================
   // COMPRAS
   // =========================
-  const [compras, setCompras] = useState([
-    {
-      idCompra: 4,
-      fecha: "07/09/2026",
-      proveedor: "Abarrotes Lima",
-      costo: 200.0,
-      estado: "Entregado",
-      lotes: [
-        {
-          idLote: 4,
-          fecha: "07/09/2026",
-          producto: "Bolsas de basura",
-          cantidad: 25,
-          cantidadInicial: 25,
-          cantidadActual: 2,
-          precioUnitario: 8.0,
-          precioCompraUnitario: 8.0,
-          subtotal: 200.0,
-          perecible: false,
-          fechaVencimiento: "",
-        },
-      ],
-    },
-    {
-      idCompra: 3,
-      fecha: "07/09/2026",
-      proveedor: "Abarrotes Lima",
-      costo: 105.0,
-      estado: "Entregado",
-      lotes: [
-        {
-          idLote: 3,
-          fecha: "07/09/2026",
-          producto: "Azúcar rubia",
-          cantidad: 25,
-          cantidadInicial: 25,
-          cantidadActual: 8,
-          precioUnitario: 4.2,
-          precioCompraUnitario: 4.2,
-          subtotal: 105.0,
-          perecible: true,
-          fechaVencimiento: "15/03/2027",
-        },
-      ],
-    },
-    {
-      idCompra: 2,
-      fecha: "05/09/2026",
-      proveedor: "Proveedor de abarrotes",
-      costo: 112.5,
-      estado: "Entregado",
-      lotes: [
-        {
-          idLote: 2,
-          fecha: "05/09/2026",
-          producto: "Arroz Faraón",
-          cantidad: 25,
-          cantidadInicial: 25,
-          cantidadActual: 20,
-          precioUnitario: 4.5,
-          precioCompraUnitario: 4.5,
-          subtotal: 112.5,
-          perecible: true,
-          fechaVencimiento: "05/03/2027",
-        },
-      ],
-    },
-    {
-      idCompra: 1,
-      fecha: "04/09/2026",
-      proveedor: "Distribuidora Lima",
-      costo: 100.0,
-      estado: "Entregado",
-      lotes: [
-        {
-          idLote: 1,
-          fecha: "04/09/2026",
-          producto: "Leche",
-          cantidad: 25,
-          cantidadInicial: 25,
-          cantidadActual: 22,
-          precioUnitario: 4.0,
-          precioCompraUnitario: 4.0,
-          subtotal: 100.0,
-          perecible: true,
-          fechaVencimiento: "20/10/2026",
-        },
-      ],
-    },
-  ]);
+  const [compras, setCompras] = useState([]);
 
   const [mostrarCompra, setMostrarCompra] = useState(false);
+  const [mostrarProveedorNuevo, setMostrarProveedorNuevo] = useState(false);
+  const [nombreProveedorNuevo, setNombreProveedorNuevo] = useState("");
   const [compraSeleccionada, setCompraSeleccionada] = useState(null);
   const [compraVerificando, setCompraVerificando] = useState(null);
   const [compraCancelando, setCompraCancelando] = useState(null);
   const [fechasVencimiento, setFechasVencimiento] = useState({});
-  const proveedores = [
-    "Proveedor de abarrotes",
-    "Abarrotes Lima",
-    "Distribuidora Lima",
-  ];
+  const [proveedores, setProveedores] = useState([]);
+  const [catalogos, setCatalogos] = useState({ units: [], providers: [], payment_methods: [], sale_types: [], expense_categories: [] });
 
   const [nuevaCompra, setNuevaCompra] = useState({
     proveedor: "",
@@ -326,22 +223,7 @@ function App() {
   // =========================
   // GASTOS
   // =========================
-  const [gastos, setGastos] = useState([
-    {
-      id: 1,
-      fecha: "06/09/2026",
-      descripcion: "Transporte",
-      categoria: "Operativo",
-      monto: 15.0,
-    },
-    {
-      id: 2,
-      fecha: "05/09/2026",
-      descripcion: "Servicio de luz",
-      categoria: "Servicios",
-      monto: 80.0,
-    },
-  ]);
+  const [gastos, setGastos] = useState([]);
 
   const [mostrarGasto, setMostrarGasto] = useState(false);
 
@@ -374,9 +256,10 @@ const abrirNuevoProducto = () => {
     setProductoEditando(producto);
 
     setNuevoProducto({
-  nombre: producto.nombre,
-  unidad: producto.unidad,
-  precio: producto.precio,
+      nombre: producto.nombre,
+      unidad: producto.unidad,
+      precio: producto.precio,
+      perecible: producto.perecible,
 });
 
     setMostrarFormulario(true);
@@ -385,75 +268,35 @@ const abrirNuevoProducto = () => {
   // =========================
   // INVENTARIO - GUARDAR
   // =========================
-  const guardarProducto = (e) => {
+  const guardarProducto = async (e) => {
     e.preventDefault();
-
-    if (
-      !nuevoProducto.nombre ||
-      nuevoProducto.precio === ""
-    ) {
-      alert("Completa todos los campos.");
+    const unit = catalogos.units.find((item) => item.abreviatura === nuevoProducto.unidad);
+    if (!nuevoProducto.nombre.trim() || !unit || Number(nuevoProducto.precio) <= 0) {
+      alert("Completa el nombre, unidad y un precio mayor que cero.");
       return;
     }
-
-if (Number(nuevoProducto.precio) <= 0) {
-  alert("El precio debe ser mayor que 0.");
-  return;
-}
-if (productoEditando) {
-  setProductos(
-    productos.map((producto) =>
-      producto.id === productoEditando.id
-        ? {
-            ...producto,
-            nombre: nuevoProducto.nombre,
-            unidad: nuevoProducto.unidad,
-            precio: Number(nuevoProducto.precio),
-            precioVenta: Number(nuevoProducto.precio),
-          }
-        : producto
-    )
-  );
-} else {
-  const nuevo = {
-    id: Date.now(),
-    nombre: nuevoProducto.nombre,
-    cantidad: 0,
-    unidad: nuevoProducto.unidad,
-    precio: Number(nuevoProducto.precio),
-    precioVenta: Number(nuevoProducto.precio),
-    perecible: false,
+    const body = {
+      name: nuevoProducto.nombre.trim(), unit_id: unit.id,
+      price: Number(nuevoProducto.precio), perishable: Boolean(nuevoProducto.perecible),
+      min_stock: Number(productoEditando?.stockMinimo ?? 5),
+    };
+    try {
+      await apiRequest(productoEditando ? `/products/${productoEditando.id}/` : "/products/", {
+        method: productoEditando ? "PATCH" : "POST", body: JSON.stringify(body),
+      });
+      await cargarDatos(accessToken);
+      setMostrarFormulario(false);
+      setProductoEditando(null);
+    } catch (error) { alert(error.message); }
   };
 
-  setProductos([...productos, nuevo]);
-}
-
-    setMostrarFormulario(false);
-
-    setNuevoProducto({
-      nombre: "",
-      cantidad: 0,
-      unidad: "unidad",
-      precio: "",
-    });
-
-    setProductoEditando(null);
+  const eliminarProducto = async (id) => {
+    const producto = productos.find((item) => item.id === id);
+    if (!producto || !window.confirm(`¿Desactivar "${producto.nombre}"?`)) return;
+    try { await apiRequest(`/products/${id}/`, { method: "DELETE" }); await cargarDatos(accessToken); }
+    catch (error) { alert(error.message); }
   };
 
-  // =========================
-  // INVENTARIO - ELIMINAR
-  // =========================
-  const eliminarProducto = (id) => {
-    const producto = productos.find((p) => p.id === id);
-
-    const confirmar = window.confirm(
-      `¿Estás seguro de eliminar "${producto.nombre}"?`
-    );
-
-    if (confirmar) {
-      setProductos(productos.filter((producto) => producto.id !== id));
-    }
-  };
 
   const productosFiltrados = productos.filter((producto) =>
     producto.nombre.toLowerCase().includes(busqueda.toLowerCase())
@@ -653,7 +496,7 @@ if (productoEditando) {
       ((ventaB.idVenta ?? 0) - (ventaA.idVenta ?? 0))
     );
   });
-  const [ventasDashboard] = useState(() => ventasOrdenadas.slice(0, 5));
+  const ventasDashboard = ventasOrdenadas.slice(0, 5);
 
   const ventasFiltradas = ventasOrdenadas.filter((venta) =>
     [obtenerCodigoVenta(venta), venta.fecha, venta.producto, venta.tipo, venta.pago]
@@ -741,364 +584,101 @@ if (productoEditando) {
   // =========================
   // VENTAS - REGISTRAR
   // =========================
-  const registrarVenta = (e) => {
+  const registrarVenta = async (e) => {
     e.preventDefault();
-
-    if (carritoVenta.length === 0) {
-      alert("Agrega al menos un producto a la venta.");
-      return;
-    }
-
-    const carritoValido = carritoVenta.every((item) => {
-      const producto = productos.find((p) => p.id === item.id);
-      return producto && item.cantidad > 0 && item.cantidad <= producto.cantidad;
-    });
-
-    if (!carritoValido) {
-      alert("Revisa las cantidades: no hay suficiente stock disponible.");
-      return;
-    }
-
-    const productosRegistrados = carritoVenta.map((item) => ({
-      ...item,
-      precio:
-        nuevaVenta.tipo === "Mayorista" ? item.precio * 0.95 : item.precio,
-    }));
-    const total = productosRegistrados.reduce(
-      (suma, item) => suma + item.precio * item.cantidad,
-      0
-    );
-
-    const venta = {
-      idVenta:
-        Math.max(
-          ...ventas.map((ventaRegistrada) =>
-            ventaRegistrada.idVenta ??
-            Number(String(ventaRegistrada.id).replace("VT-", ""))
-          ),
-          0
-        ) + 1,
-      fecha: new Date().toLocaleDateString("es-PE"),
-      productos: productosRegistrados,
-      producto: productosRegistrados[0].nombre,
-      cantidad: productosRegistrados.reduce(
-        (suma, item) => suma + item.cantidad,
-        0
-      ),
-      cantidadProductos: productosRegistrados.length,
-      tipo: nuevaVenta.tipo,
-      pago: nuevaVenta.pago,
-      total: total,
-    };
-
-    setVentas([venta, ...ventas]);
-
-    // Descontar stock general
-setProductos(
-  productos.map((producto) => {
-    const item = carritoVenta.find(
-      (linea) => linea.id === producto.id
-    );
-
-    if (!item) {
-      return producto;
-    }
-
-    return {
-      ...producto,
-      cantidad: producto.cantidad - item.cantidad,
-    };
-  })
-);
-
-// Actualizar cantidad de los lotes usando FIFO
-const cantidadesRestantes = {};
-
-carritoVenta.forEach((item) => {
-  cantidadesRestantes[item.id] = item.cantidad;
-});
-
-// Obtener todos los lotes entregados y ordenarlos del más antiguo al más reciente
-const lotesDisponibles = compras
-  .filter((compra) => obtenerEstadoCompra(compra) === "Entregado")
-  .flatMap((compra) =>
-    (compra.lotes || []).map((lote) => ({
-      idCompra: compra.idCompra,
-      idLote: lote.idLote,
-      producto: lote.producto,
-      fechaCompra: lote.fechaCompra || lote.fecha,
-      cantidadActual: Number(
-        lote.cantidadActual ?? lote.cantidad ?? 0
-      ),
-    }))
-  )
-  .sort((a, b) => {
-    const fechaA = new Date(
-      a.fechaCompra.split("/").reverse().join("-")
-    );
-
-    const fechaB = new Date(
-      b.fechaCompra.split("/").reverse().join("-")
-    );
-
-    const diferenciaFecha = fechaA - fechaB;
-
-    if (diferenciaFecha !== 0) {
-      return diferenciaFecha;
-    }
-
-    return (
-      Number(String(a.idCompra).replace("CPA-", "")) -
-      Number(String(b.idCompra).replace("CPA-", ""))
-    );
-  });
-
-// Determinar cuánto descontar de cada lote
-const descuentosPorLote = {};
-
-lotesDisponibles.forEach((lote) => {
-  const producto = productos.find(
-    (p) => p.nombre === lote.producto
-  );
-
-  if (!producto) {
-    return;
-  }
-
-  const cantidadRestante =
-    cantidadesRestantes[producto.id] || 0;
-
-  if (
-    cantidadRestante <= 0 ||
-    lote.cantidadActual <= 0
-  ) {
-    return;
-  }
-
-  const cantidadDescontar = Math.min(
-    lote.cantidadActual,
-    cantidadRestante
-  );
-
-  descuentosPorLote[
-    `${lote.idCompra}-${lote.idLote}`
-  ] = cantidadDescontar;
-
-  cantidadesRestantes[producto.id] -= cantidadDescontar;
-});
-
-// Aplicar los descuentos a los lotes correspondientes
-setCompras(
-  compras.map((compra) => ({
-    ...compra,
-    lotes: (compra.lotes || []).map((lote) => {
-      const clave = `${compra.idCompra}-${lote.idLote}`;
-      const descuento = descuentosPorLote[clave] || 0;
-
-      if (descuento === 0) {
-        return lote;
-      }
-
-      const cantidadActual = Number(
-        lote.cantidadActual ?? lote.cantidad ?? 0
-      );
-
-      return {
-        ...lote,
-        cantidadActual: cantidadActual - descuento,
-      };
-    }),
-  }))
-);
-
-    setNuevaVenta({
-      productoId: "",
-      cantidad: 1,
-      tipo: "Minorista",
-      pago: "Efectivo",
-    });
-    setCarritoVenta([]);
-    setBusquedaProductoVenta("");
-
-    setMostrarVenta(false);
+    if (!carritoVenta.length) { alert("Agrega al menos un producto a la venta."); return; }
+    const type = catalogos.sale_types.find((item) => item.name === nuevaVenta.tipo);
+    const payment = catalogos.payment_methods.find((item) => item.name === nuevaVenta.pago);
+    if (!type || !payment) { alert("Falta configurar el tipo de venta o el método de pago."); return; }
+    try {
+      await apiRequest("/sales/", { method: "POST", body: JSON.stringify({
+        sale_type_id: type.id, payment_method_id: payment.id,
+        items: carritoVenta.map((item) => ({ product_id: item.id, quantity: item.cantidad })),
+      }) });
+      await cargarDatos(accessToken);
+      setCarritoVenta([]); setMostrarVenta(false);
+      setNuevaVenta({ productoId: "", cantidad: 1, tipo: "Minorista", pago: "Efectivo" });
+    } catch (error) { alert(error.message); }
   };
+
 
   // =========================
   // COMPRAS - REGISTRAR
   // =========================
-  const registrarCompra = (e) => {
+  const registrarCompra = async (e) => {
     e.preventDefault();
-
-    if (!nuevaCompra.proveedor || carritoCompra.length === 0) {
-      alert("Selecciona un proveedor y agrega al menos un producto.");
-      return;
-    }
-
-    const siguienteOrden =
-      Math.max(
-        ...compras.map((compraRegistrada) =>
-          compraRegistrada.idCompra ??
-          Number(String(compraRegistrada.id).replace("CPA-", ""))
-        ),
-        0
-      ) + 1;
-    const siguienteLote =
-      Math.max(
-        ...compras.flatMap((compraRegistrada) =>
-          obtenerLotesCompra(compraRegistrada).map((lote) =>
-            lote.idLote ?? Number(String(lote.id).replace("LT-", ""))
-          )
-        ),
-        0
-      ) + 1;
-    const fecha = new Date().toLocaleDateString("es-PE");
-    const compra = {
-      idCompra: siguienteOrden,
-      fecha,
-      proveedor: nuevaCompra.proveedor,
-      costo: totalCarritoCompra,
-      lotes: carritoCompra.map((item, indice) => ({
-        idLote: siguienteLote + indice,
-        fecha,
-        producto: item.nombre,
-        cantidad: item.cantidad,
-        cantidadInicial: item.cantidad,
-        cantidadActual: item.cantidad,
-        precioUnitario: item.precioUnitario,
-        precioCompraUnitario: item.precioUnitario,
-        subtotal: item.precioUnitario * item.cantidad,
-        perecible: item.perecible,
-        fechaVencimiento: "",
-        idProducto: item.id,
-        fechaCompra: fecha,
-      })),
-      estado: "Pendiente de entrega",
-    };
-
-    setCompras([compra, ...compras]);
-
-    setNuevaCompra({
-      proveedor: "",
-      productoId: "",
-      cantidad: 1,
-      precioUnitario: "",
-    });
-    setBusquedaProveedorCompra("");
-    setBusquedaProductoCompra("");
-    setCarritoCompra([]);
-
-    setMostrarCompra(false);
+    const provider = catalogos.providers.find((item) => item.name === nuevaCompra.proveedor);
+    if (!provider || !carritoCompra.length) { alert("Selecciona un proveedor y agrega productos."); return; }
+    try {
+      await apiRequest("/purchases/", { method: "POST", body: JSON.stringify({
+        provider_id: provider.id,
+        items: carritoCompra.map((item) => ({ product_id: item.id, quantity: item.cantidad, unit_price: item.precioUnitario })),
+      }) });
+      await cargarDatos(accessToken);
+      setCarritoCompra([]); setMostrarCompra(false);
+      setNuevaCompra({ proveedor: "", productoId: "", cantidad: 1, precioUnitario: "" });
+    } catch (error) { alert(error.message); }
   };
 
-  const validarCompra = () => {
+
+  const validarCompra = async () => {
     if (!compraVerificando) return;
-
-    const lotes = obtenerLotesCompra(compraVerificando);
-    const faltaVencimiento = lotes.some(
-      (lote) =>
-        lote.perecible &&
-        !(fechasVencimiento[lote.idLote] || lote.fechaVencimiento)
-    );
-
-    if (faltaVencimiento) {
-      alert("Agrega la fecha de vencimiento de cada producto perecible.");
-      return;
+    const lots = obtenerLotesCompra(compraVerificando);
+    const expiries = {};
+    for (const lot of lots) {
+      const expiry = fechasVencimiento[lot.idLote] || lot.fechaVencimiento;
+      if (lot.perecible && !expiry) { alert("Agrega el vencimiento de cada producto perecible."); return; }
+      if (lot.idDetalle && expiry) expiries[lot.idDetalle] = expiry.split("/").reverse().join("-");
     }
-
-    setCompras(
-      compras.map((compra) =>
-        compra.idCompra === compraVerificando.idCompra
-          ? {
-              ...compra,
-              estado: "Entregado",
-              lotes: lotes.map((lote) => ({
-                ...lote,
-                fechaVencimiento:
-                  fechasVencimiento[lote.idLote] || lote.fechaVencimiento || "",
-              })),
-            }
-          : compra
-      )
-    );
-
-    setProductos(
-      productos.map((producto) => {
-        const lotesProducto = lotes.filter(
-          (lote) => lote.producto === producto.nombre
-        );
-        const cantidadAgregada = lotesProducto.reduce(
-          (total, lote) => total + lote.cantidad,
-          0
-        );
-        return cantidadAgregada > 0
-          ? { ...producto, cantidad: producto.cantidad + cantidadAgregada }
-          : producto;
-      })
-    );
-
-    setCompraVerificando(null);
-    setFechasVencimiento({});
+    try {
+      await apiRequest(`/purchases/${compraVerificando.idCompra}/deliver/`, { method: "POST", body: JSON.stringify({ expiries }) });
+      await cargarDatos(accessToken); setCompraVerificando(null); setFechasVencimiento({});
+    } catch (error) { alert(error.message); }
   };
 
-  const cancelarCompra = () => {
+  const cancelarCompra = async () => {
     if (!compraCancelando) return;
-
-    setCompras(
-      compras.map((compra) =>
-        compra.idCompra === compraCancelando.idCompra
-          ? { ...compra, estado: "Cancelado" }
-          : compra
-      )
-    );
-    setCompraCancelando(null);
-    setCompraVerificando(null);
-    setFechasVencimiento({});
+    try {
+      await apiRequest(`/purchases/${compraCancelando.idCompra}/cancel/`, { method: "POST", body: JSON.stringify({}) });
+      await cargarDatos(accessToken); setCompraCancelando(null); setCompraVerificando(null); setFechasVencimiento({});
+    } catch (error) { alert(error.message); }
   };
 
-  // =========================
-  // GASTOS - REGISTRAR
-  // =========================
-  const registrarGasto = (e) => {
+  const registrarGasto = async (e) => {
     e.preventDefault();
-
-    const monto = Number(nuevoGasto.monto);
-
-    if (!nuevoGasto.descripcion || monto <= 0) {
-      alert("Completa la descripción y coloca un monto válido.");
-      return;
+    const category = catalogos.expense_categories.find((item) => item.name === nuevoGasto.categoria);
+    if (!nuevoGasto.descripcion.trim() || Number(nuevoGasto.monto) <= 0 || !category) {
+      alert("Completa la descripción, categoría y un monto válido."); return;
     }
-
-    const gasto = {
-      id: Date.now(),
-      fecha: new Date().toLocaleDateString("es-PE"),
-      descripcion: nuevoGasto.descripcion,
-      categoria: nuevoGasto.categoria,
-      monto: monto,
-    };
-
-    setGastos([gasto, ...gastos]);
-
-    setNuevoGasto({
-      descripcion: "",
-      categoria: "Operativo",
-      monto: "",
-    });
-
-    setMostrarGasto(false);
+    try {
+      await apiRequest("/expenses/", { method: "POST", body: JSON.stringify({
+        description: nuevoGasto.descripcion.trim(), category_id: category.id, amount: Number(nuevoGasto.monto),
+      }) });
+      await cargarDatos(accessToken); setMostrarGasto(false);
+      setNuevoGasto({ descripcion: "", categoria: "Operativo", monto: "" });
+    } catch (error) { alert(error.message); }
   };
+
 
   // =========================
   // CÁLCULOS
   // =========================
+  const totalCompras = compras.reduce(
+    (total, compra) =>
+      total +
+      (obtenerEstadoCompra(compra) === "Entregado"
+        ? Number(compra.costo ?? calcularTotalCompra(compra) ?? 0)
+        : 0),
+    0
+  );
+
   const totalVentas = ventas.reduce(
     (total, venta) => total + venta.total,
     0
   );
 
-  const totalCompras = compras.reduce(
-    (total, compra) =>
-      total +
-      (obtenerEstadoCompra(compra) === "Entregado" ? compra.costo : 0),
+  const costoProductosVendidos = ventas.reduce(
+    (total, venta) => total + (venta.costoVendido || 0),
     0
   );
 
@@ -1107,7 +687,8 @@ setCompras(
     0
   );
 
-  const gananciaEstimada = totalVentas - totalCompras - totalGastos;
+  const gananciaEstimada = totalVentas - costoProductosVendidos - totalGastos;
+  const costosVentasIncompletos = ventas.some((venta) => !venta.costoCompleto);
 
   const stockBajo = productos.filter(
     (producto) => producto.cantidad <= 5
@@ -1136,6 +717,14 @@ setCompras(
   const cambiarSeccion = (nuevaSeccion) => {
     setVentaSeleccionada(null);
     setSeccion(nuevaSeccion);
+  };
+
+  const generarReporte = async () => {
+    const query = new URLSearchParams();
+    if (fechaDesde) query.set("from", fechaDesde);
+    if (fechaHasta) query.set("to", fechaHasta);
+    try { setReporte(await apiRequest(`/reports/?${query.toString()}`)); }
+    catch (error) { alert(error.message); }
   };
 
   // ===== FORMULARIO LOGIN: INICIO =====
@@ -1194,6 +783,7 @@ setCompras(
         <div className="sidebar-logo">
           <h2>Rapid Market</h2>
           <span>Sistema de Gestión</span>
+          {rol && <small>Rol: {rol}</small>}
         </div>
 
         <nav className="sidebar-menu">
@@ -1206,7 +796,7 @@ setCompras(
             }
             onClick={() => cambiarSeccion("inicio")}
           >
-            🏠 Dashboard
+            📊 {esAdministrador ? "Resumen y reportes" : "Resumen"}
           </button>
 
           <button
@@ -1231,7 +821,7 @@ setCompras(
             🛒 Ventas
           </button>
 
-          <button
+          {esAdministrador && <button
             className={
               seccion === "compras"
                 ? "menu-item active"
@@ -1240,9 +830,9 @@ setCompras(
             onClick={() => cambiarSeccion("compras")}
           >
             🚚 Compras
-          </button>
+          </button>}
 
-          <button
+          {esAdministrador && <button
             className={
               seccion === "gastos"
                 ? "menu-item active"
@@ -1251,18 +841,8 @@ setCompras(
             onClick={() => cambiarSeccion("gastos")}
           >
             💰 Gastos
-          </button>
+          </button>}
 
-          <button
-            className={
-              seccion === "reportes"
-                ? "menu-item active"
-                : "menu-item"
-            }
-            onClick={() => cambiarSeccion("reportes")}
-          >
-            📊 Reportes
-          </button>
 
         </nav>
 
@@ -1283,8 +863,8 @@ setCompras(
           <>
             <div className="page-header">
               <div>
-                <h1>Dashboard</h1>
-                <p>Resumen general de Rapid Market</p>
+                <h1>{esAdministrador ? "Resumen y reportes" : "Resumen"}</h1>
+                <p>{esAdministrador ? "Vista general del negocio y análisis por periodo" : "Consulta tu actividad de ventas y el stock disponible"}</p>
               </div>
             </div>
 
@@ -1312,19 +892,20 @@ setCompras(
                 <div className="stat-icon">🛒</div>
 
                 <div>
-                  <span>Ventas acumuladas</span>
+                  <span>{esAdministrador ? "Ventas acumuladas" : "Mis ventas"}</span>
                   <h2>S/ {totalVentas.toFixed(2)}</h2>
                 </div>
               </div>
 
-              <div className="stat-card">
+              {esAdministrador && <div className="stat-card">
                 <div className="stat-icon">💰</div>
 
                 <div>
                   <span>Ganancia estimada</span>
                   <h2>S/ {gananciaEstimada.toFixed(2)}</h2>
+                  {costosVentasIncompletos && <small>Hay ventas sin costo de lote completo; la cifra podría ser mayor a la real.</small>}
                 </div>
-              </div>
+              </div>}
 
             </div>
                       <div className="content-card sales-chart-card">
@@ -1373,7 +954,7 @@ setCompras(
 
               <div className="content-card">
 
-                <h3>Ventas recientes</h3>
+                <h3>{esAdministrador ? "Ventas recientes" : "Mis ventas recientes"}</h3>
 
                 {ventasDashboard.map((venta) => (
                   <div className="sale-row" key={venta.idVenta ?? venta.id}>
@@ -1411,6 +992,106 @@ setCompras(
               </div>
 
             </div>
+
+            {esAdministrador && <div className="page-header">
+              <div>
+                <h1>Reportes detallados</h1>
+                <p>Filtra la información por tipo y periodo.</p>
+              </div>
+            </div>}
+
+            {esAdministrador && <div className="reports-panel">
+              <div className="reports-form">
+                <div className="form-group">
+                  <label htmlFor="tipo-reporte">Tipo de reporte</label>
+                  <select
+                    id="tipo-reporte"
+                    value={tipoReporte}
+                    onChange={(e) => setTipoReporte(e.target.value)}
+                  >
+                    <option value="ventas">Ventas</option>
+                    <option value="productos">Productos</option>
+                    <option value="compras">Compras</option>
+                    <option value="gastos">Gastos</option>
+                    <option value="ganancias">Ganancias</option>
+                  </select>
+                </div>
+
+                <div className="reports-date-row">
+                  <div className="form-group">
+                    <label htmlFor="fecha-desde">Desde</label>
+                    <input
+                      id="fecha-desde"
+                      type="date"
+                      value={fechaDesde}
+                      onChange={(e) => {
+                        const nuevaFechaDesde = e.target.value;
+                        setFechaDesde(nuevaFechaDesde);
+
+                        if (fechaHasta && fechaHasta < nuevaFechaDesde) {
+                          setFechaHasta("");
+                        }
+                      }}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="fecha-hasta">Hasta</label>
+                    <input
+                      id="fecha-hasta"
+                      type="date"
+                      min={fechaDesde || undefined}
+                      value={fechaHasta}
+                      onChange={(e) => {
+                        if (!fechaDesde || e.target.value >= fechaDesde) {
+                          setFechaHasta(e.target.value);
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="reports-actions">
+                  <button type="button" className="secondary-button" onClick={() => {
+                    setTipoReporte("ventas");
+                    setFechaDesde("");
+                    setFechaHasta("");
+                    setReporte(null);
+                  }}>
+                    Limpiar
+                  </button>
+
+                  <button type="button" className="primary-button" onClick={generarReporte}>
+                    Generar reporte
+                  </button>
+                </div>
+                {reporte && (
+                  <div className="report-results" aria-live="polite">
+                    <h2>Resumen del periodo</h2>
+                    <p>Ventas: S/ {Number(reporte.sales_total).toFixed(2)}</p>
+                    <p>Compras recibidas (referencia): S/ {Number(reporte.purchases_total).toFixed(2)}</p>
+                    <p>Costo de productos vendidos: S/ {Number(reporte.cost_of_goods_sold).toFixed(2)}</p>
+                    <p>Gastos: S/ {Number(reporte.expenses_total).toFixed(2)}</p>
+                    <p>Ganancia estimada: S/ {Number(reporte.estimated_profit).toFixed(2)}</p>
+                    {Number(reporte.sales_without_complete_cost) > 0 && <p className="report-cost-warning">Hay {reporte.sales_without_complete_cost} venta(s) sin costo de lote completo; la ganancia podría ser mayor a la real.</p>}
+                    <div className="table-container">
+                      <table>
+                        <thead><tr><th>Detalle</th><th>Fecha / estado</th><th>Monto / stock</th></tr></thead>
+                        <tbody>
+                          {(tipoReporte === "ventas" ? reporte.sales : tipoReporte === "productos" ? reporte.products : tipoReporte === "compras" ? reporte.purchases : tipoReporte === "gastos" ? reporte.expenses : []).map((row, index) => (
+                            <tr key={row.id || row.day || index}>
+                              <td>{row.name || row.description || row.provider || (row.day ? fechaVista(row.day) : "")}</td>
+                              <td>{row.state || row.category || (row.count ? `${row.count} venta(s)` : "")}</td>
+                              <td>{row.stock !== undefined ? `${Number(row.stock)} ${row.unit_abbr}` : `S/ ${Number(row.total ?? row.amount ?? row.price ?? 0).toFixed(2)}`}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>}
           </>
         )}
 
@@ -1424,12 +1105,12 @@ setCompras(
                 <p>Control de productos y existencias</p>
               </div>
 
-              <button
+              {esAdministrador && <button
                 className="primary-button"
                 onClick={abrirNuevoProducto}
               >
                 + Nuevo producto
-              </button>
+              </button>}
 
             </div>
 
@@ -1527,13 +1208,23 @@ setCompras(
     <span aria-hidden="true">👁</span> Detalles
   </button>
 
-  <button
+  {esAdministrador && <button
     type="button"
     className="edit-button"
     onClick={() => abrirEditarProducto(producto)}
   >
     <span aria-hidden="true">✏️</span> Editar
-  </button>
+  </button>}
+
+  {esAdministrador && <button
+    type="button"
+    className="action-button delete"
+    title="Desactivar producto"
+    aria-label={`Desactivar ${producto.nombre}`}
+    onClick={() => eliminarProducto(producto.id)}
+  >
+    🗑️
+  </button>}
 
 </div>
 
@@ -1668,7 +1359,7 @@ setCompras(
         )}
 
         {/* ================= COMPRAS ================= */}
-        {seccion === "compras" && (
+        {seccion === "compras" && esAdministrador && (
           <>
             <div className="page-header">
 
@@ -1694,7 +1385,7 @@ setCompras(
               </div>
 
               <div className="summary-card">
-                <span>Costos registrados</span>
+                <span>Costo de compras recibidas</span>
                 <strong>S/ {totalCompras.toFixed(2)}</strong>
               </div>
 
@@ -1732,7 +1423,15 @@ setCompras(
 
                   <tbody>
 
-                    {comprasFiltradas.map((compra) => (
+                    {comprasFiltradas.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="empty-state">
+                          {busquedaCompras.trim()
+                            ? "No se encontraron compras con esa búsqueda."
+                            : "Todavía no hay compras registradas."}
+                        </td>
+                      </tr>
+                    ) : comprasFiltradas.map((compra) => (
                       <tr key={compra.idCompra ?? compra.id}>
 
                         <td>{obtenerCodigoCompra(compra)}</td>
@@ -1792,7 +1491,7 @@ setCompras(
         )}
 
         {/* ================= GASTOS ================= */}
-        {seccion === "gastos" && (
+        {seccion === "gastos" && esAdministrador && (
           <>
             <div className="page-header">
 
@@ -1880,81 +1579,6 @@ setCompras(
           </>
         )}
 
-        {/* ================= REPORTES ================= */}
-        {seccion === "reportes" && (
-          <>
-            <div className="page-header">
-              <h1>REPORTES</h1>
-            </div>
-
-            <div className="reports-panel">
-              <div className="reports-form">
-                <div className="form-group">
-                  <label htmlFor="tipo-reporte">Tipo de reporte</label>
-                  <select
-                    id="tipo-reporte"
-                    value={tipoReporte}
-                    onChange={(e) => setTipoReporte(e.target.value)}
-                  >
-                    <option value="ventas">Ventas</option>
-                    <option value="productos">Productos</option>
-                    <option value="compras">Compras</option>
-                    <option value="gastos">Gastos</option>
-                    <option value="ganancias">Ganancias</option>
-                  </select>
-                </div>
-
-                <div className="reports-date-row">
-                  <div className="form-group">
-                    <label htmlFor="fecha-desde">Desde</label>
-                    <input
-                      id="fecha-desde"
-                      type="date"
-                      value={fechaDesde}
-                      onChange={(e) => {
-                        const nuevaFechaDesde = e.target.value;
-                        setFechaDesde(nuevaFechaDesde);
-
-                        if (fechaHasta && fechaHasta < nuevaFechaDesde) {
-                          setFechaHasta("");
-                        }
-                      }}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor="fecha-hasta">Hasta</label>
-                    <input
-                      id="fecha-hasta"
-                      type="date"
-                      min={fechaDesde || undefined}
-                      value={fechaHasta}
-                      onChange={(e) => {
-                        if (!fechaDesde || e.target.value >= fechaDesde) {
-                          setFechaHasta(e.target.value);
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div className="reports-actions">
-                  <button type="button" className="secondary-button" onClick={() => {
-                    setTipoReporte("ventas");
-                    setFechaDesde("");
-                    setFechaHasta("");
-                  }}>
-                    Limpiar
-                  </button>
-
-                  <button type="button" className="primary-button">
-                    Generar reporte
-                  </button>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
 
       </main>
 
@@ -2058,6 +1682,17 @@ setCompras(
                   }
                 />
 
+              </div>
+
+              <div className="form-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(nuevoProducto.perecible)}
+                    onChange={(e) => setNuevoProducto({ ...nuevoProducto, perecible: e.target.checked })}
+                  />
+                  Producto perecible (requiere fecha de vencimiento al recibir compras)
+                </label>
               </div>
 
               <div className="modal-actions">
@@ -2731,6 +2366,29 @@ setCompras(
               <div className="form-group">
 
                 <label>Proveedor</label>
+
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setMostrarProveedorNuevo((visible) => !visible)}
+                >
+                  {mostrarProveedorNuevo ? "Cancelar nuevo proveedor" : "+ Agregar proveedor"}
+                </button>
+
+                {mostrarProveedorNuevo && (
+                  <div className="provider-create-row">
+                    <input
+                      type="text"
+                      maxLength="150"
+                      placeholder="Nombre del proveedor"
+                      value={nombreProveedorNuevo}
+                      onChange={(event) => setNombreProveedorNuevo(event.target.value)}
+                    />
+                    <button type="button" className="primary-button" onClick={guardarProveedor}>
+                      Guardar proveedor
+                    </button>
+                  </div>
+                )}
 
                 <div className="product-autocomplete">
                   <input

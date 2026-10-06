@@ -34,13 +34,13 @@ Aplicacion de gestion con frontend React/Vite y backend Django REST Framework.
 	.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 	```
 
-6. Solo para una base nueva, inicializa las tablas propias de Rapid Market con el esquema versionado:
+6. Solo para una base nueva, inicializa las tablas propias de Rapid Market con el esquema compatible con PostgreSQL 16:
 
 	```powershell
-	psql -U postgres -d rapid_market -f database_schema.sql
+	psql -U postgres -d rapid_market -f database_schema_pg16.sql
 	```
 
-	Si `psql` no esta en el PATH, ejecuta `database_schema.sql` desde pgAdmin (Query Tool). El archivo contiene estructura, no filas ni cuentas. Si ya usas una base compartida que contiene estas tablas, no vuelvas a importar el esquema.
+	Si `psql` no esta en el PATH, ejecuta `database_schema_pg16.sql` desde pgAdmin (Query Tool). El archivo contiene estructura, no filas ni cuentas. Si ya usas una base compartida que contiene estas tablas, no vuelvas a importar el esquema.
 
 7. Crea las tablas de Django:
 
@@ -48,13 +48,25 @@ Aplicacion de gestion con frontend React/Vite y backend Django REST Framework.
 	.\.venv\Scripts\python.exe manage.py migrate
 	```
 
-8. Instala las dependencias del frontend:
+8. Crea los catálogos iniciales que necesita la aplicación:
+
+	```powershell
+	.\.venv\Scripts\python.exe manage.py seed_initial_data
+	```
+
+9. Instala las dependencias del frontend:
 
 	```powershell
 	npm ci
 	```
 
-9. Crea o solicita de forma segura una cuenta de aplicacion en la tabla `usuarios`. `createsuperuser` crea una cuenta Django distinta y no sirve para el login de Rapid Market.
+10. Crea la cuenta de aplicación que usarás para entrar:
+
+	```powershell
+	.\.venv\Scripts\python.exe crear_usuario_app.py
+	```
+
+	Elige el rol Administrador o Vendedor y escribe una contraseña de al menos 12 caracteres. Se solicita dos veces y no se muestra en pantalla. `createsuperuser` crea una cuenta Django distinta y no sirve para el login de Rapid Market. Si ya tienes una cuenta local, cambia su contraseña ejecutando `cambiar_password_app.py`.
 
 ## Ejecutar el sistema
 
@@ -77,6 +89,14 @@ Abre la URL que indique Vite, normalmente `http://localhost:5173`.
 ## Siguientes ejecuciones
 
 No vuelvas a crear el entorno ni a instalar dependencias. Inicia PostgreSQL y ejecuta los dos comandos de servidor en terminales separadas.
+
+El frontend y las operaciones de inventario, ventas, compras, gastos y reportes leen/escriben PostgreSQL a través de la API Django. Las ventas descuentan stock desde lotes disponibles; la recepción de una compra agrega ese lote al stock.
+
+El Administrador puede consultar todas las áreas. El Vendedor consulta productos y stock, registra ventas y ve su propio historial; compras, gastos, costos y reportes quedan restringidos al Administrador. Para crear la cuenta Vendedor, ejecuta `seed_initial_data` y luego `crear_usuario_app.py`.
+
+## Seguridad
+
+Se aplicaron controles básicos inspirados en OWASP API Security Top 10 y ASVS. La guía de controles y los límites pendientes están en [docs/OWASP_IMPLEMENTATION.md](docs/OWASP_IMPLEMENTATION.md). El proyecto sigue siendo académico/local y requiere HTTPS, configuración de producción y revisión antes de publicarlo.
 
 ## Archivos locales y secretos
 
