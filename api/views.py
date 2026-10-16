@@ -18,8 +18,11 @@ from .authentication import lookup_database_user
 from .permissions import IsAdministrator, is_administrator
 
 logger = logging.getLogger("rapid_market.api")
+PAGE_SIZE = 10
 
 
+# ===== HELPERS COMPARTIDOS DE SQL Y VALIDACIÓN: INICIO =====
+# rows/one centralizan la lectura SQL; los validadores convierten y verifican entradas API.
 def rows(sql, params=()):
     with connection.cursor() as cursor:
         cursor.execute(sql, params)
@@ -64,27 +67,122 @@ def object_payload(data):
     if not isinstance(data, Mapping):
         raise ValidationError({"detail": "Envía los datos en formato de objeto."})
     return data
+# ===== HELPERS COMPARTIDOS DE SQL Y VALIDACIÓN: FIN =====
 
 
-def list_products():
-    return rows("""
+# ===== INVENTARIO - CONSULTAS DE PRODUCTOS Y LOTES: INICIO =====
+# Devuelven el detalle y stock de un producto, sus lotes o una página filtrada.
+def get_product(product_id):
+    return one("""
         SELECT p.id, p.nombre AS name, p.precio_venta AS price,
                p.perecible AS perishable, p.stock_minimo AS min_stock,
                p.activo AS active, u.id AS unit_id, u.nombre AS unit,
                u.abreviatura AS unit_abbr,
-               COALESCE(SUM(CASE WHEN ec.nombre = 'Entregado' AND (l.fecha_vencimiento IS NULL OR l.fecha_vencimiento >= CURRENT_DATE) THEN l.cantidad_actual ELSE 0 END), 0) AS stock
-        FROM productos p JOIN unidades_medida u ON u.id = p.id_unidad
+               COALESCE(SUM(CASE
+                   WHEN ec.nombre = 'Entregado'
+                     AND (l.fecha_vencimiento IS NULL OR l.fecha_vencimiento >= CURRENT_DATE)
+                   THEN l.cantidad_actual ELSE 0
+               END), 0) AS stock,
+               COUNT(DISTINCT l.id) FILTER (WHERE ec.nombre = 'Entregado') AS lot_count
+        FROM productos p
+        JOIN unidades_medida u ON u.id = p.id_unidad
         LEFT JOIN detalle_compras dc ON dc.id_producto = p.id
         LEFT JOIN compras c ON c.id = dc.id_compra
         LEFT JOIN estados_compra ec ON ec.id = c.id_estado
         LEFT JOIN lotes l ON l.id_detalle_compra = dc.id
-        WHERE p.activo = true
-        GROUP BY p.id, u.id ORDER BY p.nombre
-    """)
+        WHERE p.id = %s
+        GROUP BY p.id, u.id
+    """, [product_id])
 
 
-def list_sales(user_id=None, include_costs=True):
-    sales_filter = "WHERE v.id_usuario = %s" if user_id is not None else ""
+def list_product_lots(product_id):
+    return rows("""
+        SELECT c.id AS purchase_id, c.fecha AS purchase_date, l.id AS lot_id,
+               p.nombre AS product, u.abreviatura AS unit,
+               l.cantidad_inicial AS initial_quantity,
+               l.cantidad_actual AS current_quantity,
+               l.fecha_vencimiento AS expiry_date
+        FROM lotes l
+        JOIN detalle_compras dc ON dc.id = l.id_detalle_compra
+        JOIN compras c ON c.id = dc.id_compra
+        JOIN estados_compra ec ON ec.id = c.id_estado
+        JOIN productos p ON p.id = dc.id_producto
+        JOIN unidades_medida u ON u.id = p.id_unidad
+        WHERE dc.id_producto = %s AND ec.nombre = 'Entregado'
+        ORDER BY c.fecha DESC, l.id DESC
+    """, [product_id])
+
+
+def list_product_page(page, search=""):
+    search_term = f"%{search}%"
+    total = one(
+        "SELECT COUNT(*) AS total FROM productos WHERE activo=true AND nombre ILIKE %s",
+        [search_term],
+    )["total"]
+    page_size = 10
+    total_pages = (total + page_size - 1) // page_size
+    page = min(page, max(total_pages, 1))
+    products = rows("""
+        WITH product_page AS (
+            SELECT p.id, p.nombre AS name, p.precio_venta AS price,
+                   p.perecible AS perishable, p.stock_minimo AS min_stock,
+                   p.activo AS active, u.id AS unit_id, u.nombre AS unit,
+                   u.abreviatura AS unit_abbr
+            FROM productos p
+            JOIN unidades_medida u ON u.id = p.id_unidad
+            WHERE p.activo=true AND p.nombre ILIKE %s
+            ORDER BY p.nombre, p.id
+            LIMIT %s OFFSET %s
+        )
+        SELECT pp.id, pp.name, pp.price, pp.perishable, pp.min_stock, pp.active,
+               pp.unit_id, pp.unit, pp.unit_abbr,
+               COALESCE(SUM(CASE
+                   WHEN ec.nombre = 'Entregado'
+                     AND (l.fecha_vencimiento IS NULL OR l.fecha_vencimiento >= CURRENT_DATE)
+                   THEN l.cantidad_actual ELSE 0
+               END), 0) AS stock,
+               COUNT(DISTINCT l.id) FILTER (WHERE ec.nombre = 'Entregado') AS lot_count
+        FROM product_page pp
+        LEFT JOIN detalle_compras dc ON dc.id_producto = pp.id
+        LEFT JOIN compras c ON c.id = dc.id_compra
+        LEFT JOIN estados_compra ec ON ec.id = c.id_estado
+        LEFT JOIN lotes l ON l.id_detalle_compra = dc.id
+        GROUP BY pp.id, pp.name, pp.price, pp.perishable, pp.min_stock,
+                 pp.active, pp.unit_id, pp.unit, pp.unit_abbr
+        ORDER BY pp.name, pp.id
+    """, [search_term, page_size, (page - 1) * page_size])
+    return {
+        "results": products,
+        "count": total,
+        "page": page,
+        "page_size": page_size,
+    }
+# ===== INVENTARIO - CONSULTAS DE PRODUCTOS Y LOTES: FIN =====
+
+
+# ===== VENTAS - CONSULTAS E HISTORIAL: INICIO =====
+# Construyen los detalles de ventas y su historial filtrado/paginado.
+def list_sales(user_id=None, include_costs=True, *, page=None, search="", sale_id=None):
+    conditions = []
+    params = []
+    if user_id is not None:
+        conditions.append("v.id_usuario = %s")
+        params.append(user_id)
+    if sale_id is not None:
+        conditions.append("v.id = %s")
+        params.append(sale_id)
+    if search:
+        search_term = f"%{search}%"
+        conditions.append("""(
+            v.id::text ILIKE %s OR v.fecha::date::text ILIKE %s OR
+            tv.nombre ILIKE %s OR mp.nombre ILIKE %s OR EXISTS (
+                SELECT 1 FROM detalle_ventas dv_search
+                JOIN productos p_search ON p_search.id = dv_search.id_producto
+                WHERE dv_search.id_venta = v.id AND p_search.nombre ILIKE %s
+            )
+        )""")
+        params.extend([search_term] * 5)
+    sales_filter = f"WHERE {' AND '.join(conditions)}" if conditions else ""
     cost_fields = """
                ,COALESCE((SELECT SUM(dvl.cantidad * dc.precio_unitario)
                          FROM detalle_ventas dv_cost
@@ -112,7 +210,12 @@ def list_sales(user_id=None, include_costs=True):
         {sales_filter}
         GROUP BY v.id, tv.nombre, tv.descuento_porcentaje, mp.nombre
         ORDER BY v.fecha DESC, v.id DESC
-    """.format(cost_fields=cost_fields, sales_filter=sales_filter), [user_id] if user_id is not None else ())
+        {limit_clause}
+    """.format(
+        cost_fields=cost_fields,
+        sales_filter=sales_filter,
+        limit_clause="LIMIT %s OFFSET %s" if page is not None else "",
+    ), params + ([PAGE_SIZE, (page - 1) * PAGE_SIZE] if page is not None else []))
     for sale in sales:
         sale["items"] = rows("""
             SELECT p.id AS product_id, p.nombre AS name, dv.cantidad AS quantity,
@@ -123,15 +226,70 @@ def list_sales(user_id=None, include_costs=True):
     return sales
 
 
-def list_purchases():
+def list_sales_page(user_id=None, include_costs=True, page=1, search=""):
+    conditions = []
+    params = []
+    if user_id is not None:
+        conditions.append("v.id_usuario = %s")
+        params.append(user_id)
+    if search:
+        search_term = f"%{search}%"
+        conditions.append("""(
+            v.id::text ILIKE %s OR v.fecha::date::text ILIKE %s OR
+            tv.nombre ILIKE %s OR mp.nombre ILIKE %s OR EXISTS (
+                SELECT 1 FROM detalle_ventas dv_search
+                JOIN productos p_search ON p_search.id = dv_search.id_producto
+                WHERE dv_search.id_venta = v.id AND p_search.nombre ILIKE %s
+            )
+        )""")
+        params.extend([search_term] * 5)
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    count = one(f"""
+        SELECT COUNT(*) AS total
+        FROM ventas v
+        JOIN tipos_venta tv ON tv.id = v.id_tipo_venta
+        JOIN metodos_pago mp ON mp.id = v.id_metodo_pago
+        {where_clause}
+    """, params)["total"]
+    page = min(page, max((count + PAGE_SIZE - 1) // PAGE_SIZE, 1))
+    sales = list_sales(user_id, include_costs, page=page, search=search)
+    return {"results": sales, "count": count, "page": page, "page_size": PAGE_SIZE}
+# ===== VENTAS - CONSULTAS E HISTORIAL: FIN =====
+
+
+# ===== COMPRAS - CONSULTAS E HISTORIAL: INICIO =====
+# Consultan compras con sus lotes/detalles y entregan páginas para el historial.
+def list_purchases(*, page=None, search="", purchase_id=None):
+    conditions = []
+    params = []
+    if purchase_id is not None:
+        conditions.append("c.id = %s")
+        params.append(purchase_id)
+    if search:
+        search_term = f"%{search}%"
+        conditions.append("""(
+            c.id::text ILIKE %s OR c.fecha::date::text ILIKE %s OR
+            p.nombre ILIKE %s OR ec.nombre ILIKE %s OR EXISTS (
+                SELECT 1 FROM detalle_compras dc_search
+                JOIN productos p_search ON p_search.id = dc_search.id_producto
+                WHERE dc_search.id_compra = c.id AND p_search.nombre ILIKE %s
+            )
+        )""")
+        params.extend([search_term] * 5)
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
     purchases = rows("""
         SELECT c.id, c.fecha, p.nombre AS provider, ec.nombre AS state,
                COALESCE(SUM(dc.cantidad * dc.precio_unitario), 0) AS total
         FROM compras c JOIN proveedores p ON p.id = c.id_proveedor
         JOIN estados_compra ec ON ec.id = c.id_estado
         LEFT JOIN detalle_compras dc ON dc.id_compra = c.id
+        {where_clause}
         GROUP BY c.id, p.nombre, ec.nombre ORDER BY c.fecha DESC, c.id DESC
-    """)
+        {limit_clause}
+    """.format(
+        where_clause=where_clause,
+        limit_clause="LIMIT %s OFFSET %s" if page is not None else "",
+    ), params + ([PAGE_SIZE, (page - 1) * PAGE_SIZE] if page is not None else []))
     for purchase in purchases:
         purchase["items"] = rows("""
             SELECT dc.id AS detail_id, p.id AS product_id, p.nombre AS name,
@@ -146,6 +304,191 @@ def list_purchases():
     return purchases
 
 
+def list_purchase_page(page=1, search=""):
+    search_term = f"%{search}%"
+    count = one("""
+        SELECT COUNT(*) AS total
+        FROM compras c
+        JOIN proveedores p ON p.id = c.id_proveedor
+        JOIN estados_compra ec ON ec.id = c.id_estado
+        WHERE (%s = '' OR c.id::text ILIKE %s OR c.fecha::date::text ILIKE %s
+               OR p.nombre ILIKE %s OR ec.nombre ILIKE %s OR EXISTS (
+                   SELECT 1 FROM detalle_compras dc
+                   JOIN productos pr ON pr.id = dc.id_producto
+                   WHERE dc.id_compra = c.id AND pr.nombre ILIKE %s
+               ))
+    """, [search, search_term, search_term, search_term, search_term, search_term])["total"]
+    page = min(page, max((count + PAGE_SIZE - 1) // PAGE_SIZE, 1))
+    purchases = list_purchases(page=page, search=search)
+    return {"results": purchases, "count": count, "page": page, "page_size": PAGE_SIZE}
+# ===== COMPRAS - CONSULTAS E HISTORIAL: FIN =====
+
+
+# ===== GASTOS - HISTORIAL: INICIO =====
+# Filtra y devuelve una página de gastos sin transferir el historial completo.
+def list_expense_page(page=1, search=""):
+    search_term = f"%{search}%"
+    count = one("""
+        SELECT COUNT(*) AS total
+        FROM gastos g
+        JOIN categorias_gasto c ON c.id = g.id_categoria
+        WHERE (%s = '' OR g.id::text ILIKE %s OR g.fecha::date::text ILIKE %s
+               OR g.descripcion ILIKE %s OR c.nombre ILIKE %s OR g.monto::text ILIKE %s)
+    """, [search, search_term, search_term, search_term, search_term, search_term])["total"]
+    page = min(page, max((count + PAGE_SIZE - 1) // PAGE_SIZE, 1))
+    expenses = rows("""
+        SELECT g.id,g.fecha,g.descripcion AS description,g.monto AS amount,
+               g.id_categoria AS category_id,c.nombre AS category
+        FROM gastos g
+        JOIN categorias_gasto c ON c.id=g.id_categoria
+        WHERE (%s = '' OR g.id::text ILIKE %s OR g.fecha::date::text ILIKE %s
+               OR g.descripcion ILIKE %s OR c.nombre ILIKE %s OR g.monto::text ILIKE %s)
+        ORDER BY g.fecha DESC,g.id DESC
+        LIMIT %s OFFSET %s
+    """, [search, search_term, search_term, search_term, search_term, search_term,
+          PAGE_SIZE, (page - 1) * PAGE_SIZE])
+    return {"results": expenses, "count": count, "page": page, "page_size": PAGE_SIZE}
+# ===== GASTOS - HISTORIAL: FIN =====
+
+
+# ===== PAGINACIÓN COMPARTIDA: INICIO =====
+# Valida page/search recibidos por los endpoints de listas.
+def pagination_params(request):
+    raw_page = request.query_params.get("page", "1")
+    search = request.query_params.get("search", "").strip()
+    if len(search) > 120:
+        raise ValidationError({"search": "La búsqueda debe tener hasta 120 caracteres."})
+    try:
+        page = int(raw_page)
+        if page < 1:
+            raise ValueError
+    except (TypeError, ValueError):
+        raise ValidationError({"page": "La página debe ser un entero mayor que cero."})
+    return page, search
+# ===== PAGINACIÓN COMPARTIDA: FIN =====
+
+
+# ===== RESUMEN - CÁLCULOS AGREGADOS EN POSTGRESQL: INICIO =====
+# Calcula métricas globales y devuelve solo datos breves para el dashboard.
+def dashboard_summary(user_id=None, include_financials=True):
+    product_stats = one("""
+        WITH product_stock AS (
+            SELECT p.id, p.nombre, p.stock_minimo,
+                   COALESCE(SUM(CASE
+                       WHEN ec.nombre = 'Entregado'
+                         AND (l.fecha_vencimiento IS NULL OR l.fecha_vencimiento >= CURRENT_DATE)
+                       THEN l.cantidad_actual ELSE 0
+                   END), 0) AS stock
+            FROM productos p
+            LEFT JOIN detalle_compras dc ON dc.id_producto = p.id
+            LEFT JOIN compras c ON c.id = dc.id_compra
+            LEFT JOIN estados_compra ec ON ec.id = c.id_estado
+            LEFT JOIN lotes l ON l.id_detalle_compra = dc.id
+            WHERE p.activo = true
+            GROUP BY p.id
+        )
+        SELECT COUNT(*) AS product_count,
+               COUNT(*) FILTER (WHERE stock <= stock_minimo) AS low_stock_count
+        FROM product_stock
+    """)
+    low_stock_products = rows("""
+        WITH product_stock AS (
+            SELECT p.id, p.nombre AS name, u.abreviatura AS unit_abbr,
+                   p.stock_minimo,
+                   COALESCE(SUM(CASE
+                       WHEN ec.nombre = 'Entregado'
+                         AND (l.fecha_vencimiento IS NULL OR l.fecha_vencimiento >= CURRENT_DATE)
+                       THEN l.cantidad_actual ELSE 0
+                   END), 0) AS stock
+            FROM productos p
+            JOIN unidades_medida u ON u.id = p.id_unidad
+            LEFT JOIN detalle_compras dc ON dc.id_producto = p.id
+            LEFT JOIN compras c ON c.id = dc.id_compra
+            LEFT JOIN estados_compra ec ON ec.id = c.id_estado
+            LEFT JOIN lotes l ON l.id_detalle_compra = dc.id
+            WHERE p.activo = true
+            GROUP BY p.id, u.id
+        )
+        SELECT id, name, unit_abbr, stock
+        FROM product_stock WHERE stock <= stock_minimo
+        ORDER BY stock, name LIMIT 5
+    """)
+    sales_filter = "WHERE id_usuario = %s" if user_id is not None else ""
+    sales_params = [user_id] if user_id is not None else []
+    sales = one(f"""
+        SELECT COUNT(*) AS sales_count,
+               COALESCE(SUM(sale_total), 0) AS sales_total
+        FROM (
+            SELECT v.id,
+                   COALESCE(SUM(dv.cantidad * dv.precio_unitario), 0) AS sale_total
+            FROM ventas v LEFT JOIN detalle_ventas dv ON dv.id_venta = v.id
+            {sales_filter}
+            GROUP BY v.id
+        ) sale_totals
+    """, sales_params)
+    recent_sales = list_sales(user_id, include_costs=include_financials, page=1)[:5]
+    sales_by_day = rows(f"""
+        SELECT DATE(v.fecha) AS day,
+               COALESCE(SUM(dv.cantidad * dv.precio_unitario), 0) AS total
+        FROM ventas v LEFT JOIN detalle_ventas dv ON dv.id_venta = v.id
+        {sales_filter}
+        GROUP BY DATE(v.fecha)
+        ORDER BY day DESC LIMIT 5
+    """, sales_params)
+    summary = {
+        "product_count": product_stats["product_count"],
+        "low_stock_count": product_stats["low_stock_count"],
+        "sales_count": sales["sales_count"],
+        "sales_total": sales["sales_total"],
+        "recent_sales": recent_sales,
+        "sales_by_day": sales_by_day,
+    }
+    if include_financials:
+        costs = one("""
+            SELECT COALESCE(SUM(dvl.cantidad * dc.precio_unitario), 0) AS total
+            FROM ventas v
+            JOIN detalle_ventas dv ON dv.id_venta = v.id
+            JOIN detalle_venta_lotes dvl ON dvl.id_detalle_venta = dv.id
+            JOIN lotes l ON l.id = dvl.id_lote
+            JOIN detalle_compras dc ON dc.id = l.id_detalle_compra
+        """)
+        missing_costs = one("""
+            SELECT COUNT(DISTINCT v.id) AS total
+            FROM ventas v JOIN detalle_ventas dv ON dv.id_venta = v.id
+            WHERE (SELECT COALESCE(SUM(dvl.cantidad), 0)
+                   FROM detalle_venta_lotes dvl
+                   WHERE dvl.id_detalle_venta = dv.id) < dv.cantidad
+        """)
+        expenses = one("SELECT COUNT(*) AS expense_count, COALESCE(SUM(monto),0) AS total FROM gastos")
+        purchases = one("""
+            SELECT COUNT(*) AS purchase_count,
+                   COALESCE(SUM(CASE WHEN ec.nombre = 'Entregado'
+                       THEN totals.total ELSE 0 END), 0) AS total
+            FROM compras c
+            JOIN estados_compra ec ON ec.id = c.id_estado
+            JOIN (
+                SELECT id_compra, SUM(cantidad * precio_unitario) AS total
+                FROM detalle_compras GROUP BY id_compra
+            ) totals ON totals.id_compra = c.id
+        """)
+        summary.update({
+            "cost_of_goods_sold": costs["total"],
+            "sales_without_complete_cost": missing_costs["total"],
+            "expenses_count": expenses["expense_count"],
+            "expenses_total": expenses["total"],
+            "purchases_count": purchases["purchase_count"],
+            "purchases_total": purchases["total"],
+            "estimated_profit": sales["sales_total"] - costs["total"] - expenses["total"],
+        })
+    return {
+        "summary": summary,
+        "low_stock_products": low_stock_products,
+    }
+# ===== RESUMEN - CÁLCULOS AGREGADOS EN POSTGRESQL: FIN =====
+
+
+# ===== LOGIN - AUTENTICACIÓN Y TOKENS: INICIO =====
+# LoginView valida credenciales y emite JWT; LogoutView revoca el token de renovación.
 class LoginView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
@@ -179,8 +522,11 @@ class LogoutView(APIView):
         except TokenError:
             raise ValidationError({"refresh": "Token de renovación no válido o ya revocado."})
         return Response(status=status.HTTP_204_NO_CONTENT)
+# ===== LOGIN - AUTENTICACIÓN Y TOKENS: FIN =====
 
 
+# ===== PERMISOS COMPARTIDOS: INICIO =====
+# AdminWriteMixin restringe los métodos de escritura/lectura indicados al administrador.
 class AdminWriteMixin:
     admin_methods = set()
 
@@ -188,13 +534,26 @@ class AdminWriteMixin:
         if self.request.method in self.admin_methods:
             return [IsAuthenticated(), IsAdministrator()]
         return [IsAuthenticated()]
+# ===== PERMISOS COMPARTIDOS: FIN =====
 
 
+# ===== INVENTARIO - ENDPOINTS DE PRODUCTOS: INICIO =====
+# ProductListView pagina/crea; ProductDetailView muestra lotes, edita o desactiva.
 class ProductListView(AdminWriteMixin, APIView):
     admin_methods = {"POST"}
 
     def get(self, request):
-        return Response(list_products())
+        raw_page = request.query_params.get("page", "1")
+        search = request.query_params.get("search", "").strip()
+        if len(search) > 120:
+            raise ValidationError({"search": "La búsqueda debe tener hasta 120 caracteres."})
+        try:
+            page = int(raw_page)
+            if page < 1:
+                raise ValueError
+        except (TypeError, ValueError):
+            raise ValidationError({"page": "La página debe ser un entero mayor que cero."})
+        return Response(list_product_page(page, search))
 
     def post(self, request):
         data = object_payload(request.data)
@@ -207,14 +566,22 @@ class ProductListView(AdminWriteMixin, APIView):
         perishable = boolean_value(data.get("perishable"), "perishable")
         try:
             with connection.cursor() as cursor:
-                cursor.execute("INSERT INTO productos (nombre,id_unidad,precio_venta,perecible,stock_minimo,activo) VALUES (%s,%s,%s,%s,%s,true)", [name, unit_id, price, perishable, minimum])
+                cursor.execute("INSERT INTO productos (nombre,id_unidad,precio_venta,perecible,stock_minimo,activo) VALUES (%s,%s,%s,%s,%s,true) RETURNING id", [name, unit_id, price, perishable, minimum])
+                product_id = cursor.fetchone()[0]
         except DatabaseError:
             raise ValidationError({"name": "No se pudo crear el producto. Verifica que el nombre no esté repetido y la unidad exista."})
-        return Response(next(p for p in list_products() if p["name"] == name), status=status.HTTP_201_CREATED)
+        return Response(get_product(product_id), status=status.HTTP_201_CREATED)
 
 
 class ProductDetailView(AdminWriteMixin, APIView):
     admin_methods = {"PATCH", "DELETE"}
+
+    def get(self, request, product_id):
+        product = get_product(product_id)
+        if not product or not product["active"]:
+            return Response({"detail": "Producto no encontrado."}, status=404)
+        product["lots"] = list_product_lots(product_id)
+        return Response(product)
 
     def patch(self, request, product_id):
         old = one("SELECT id,nombre,id_unidad,precio_venta,perecible,stock_minimo,activo FROM productos WHERE id=%s", [product_id])
@@ -229,7 +596,7 @@ class ProductDetailView(AdminWriteMixin, APIView):
                 cursor.execute("UPDATE productos SET nombre=%s,id_unidad=%s,precio_venta=%s,perecible=%s,stock_minimo=%s WHERE id=%s", values)
         except DatabaseError:
             raise ValidationError({"detail": "No se pudo actualizar; revisa que el nombre no esté repetido."})
-        return Response(next(p for p in list_products() if p["id"] == product_id))
+        return Response(get_product(product_id))
 
     def delete(self, request, product_id):
         with connection.cursor() as cursor:
@@ -237,8 +604,11 @@ class ProductDetailView(AdminWriteMixin, APIView):
             if cursor.rowcount == 0:
                 return Response({"detail": "Producto no encontrado o ya desactivado."}, status=404)
         return Response(status=204)
+# ===== INVENTARIO - ENDPOINTS DE PRODUCTOS: FIN =====
 
 
+# ===== REFERENCIAS Y PROVEEDORES: INICIO =====
+# Entregan catálogos para formularios y permiten crear proveedores.
 class ReferenceDataView(APIView):
     def get(self, request):
         references = {
@@ -269,13 +639,17 @@ class ProvidersView(AdminWriteMixin, APIView):
         except DatabaseError:
             raise ValidationError({"name": "Ese proveedor ya existe o los datos no son válidos."})
         return Response({"id": provider_id, "name": provider_name}, status=status.HTTP_201_CREATED)
+# ===== REFERENCIAS Y PROVEEDORES: FIN =====
 
 
+# ===== VENTAS - ENDPOINT: INICIO =====
+# SalesView lista ventas paginadas y registra una venta descontando sus lotes.
 class SalesView(APIView):
     def get(self, request):
         administrator = is_administrator(request.user)
         user_id = None if administrator else request.user.id
-        return Response(list_sales(user_id, include_costs=administrator))
+        page, search = pagination_params(request)
+        return Response(list_sales_page(user_id, administrator, page, search))
 
     @transaction.atomic
     def post(self, request):
@@ -314,15 +688,19 @@ class SalesView(APIView):
                         remaining -= amount
         administrator = is_administrator(request.user)
         user_id = None if administrator else request.user.id
-        result = next(item for item in list_sales(user_id, include_costs=administrator) if item["id"] == sale_id)
+        result = list_sales(user_id, include_costs=administrator, sale_id=sale_id)[0]
         return Response(result, status=201)
+# ===== VENTAS - ENDPOINT: FIN =====
 
 
+# ===== COMPRAS - ENDPOINTS Y ESTADOS: INICIO =====
+# PurchasesView registra/lista compras; PurchaseActionView las entrega o cancela.
 class PurchasesView(AdminWriteMixin, APIView):
     admin_methods = {"GET", "POST"}
 
     def get(self, request):
-        return Response(list_purchases())
+        page, search = pagination_params(request)
+        return Response(list_purchase_page(page, search))
 
     @transaction.atomic
     def post(self, request):
@@ -347,7 +725,7 @@ class PurchasesView(AdminWriteMixin, APIView):
                 cursor.execute("INSERT INTO detalle_compras (id_compra,id_producto,cantidad,precio_unitario) VALUES (%s,%s,%s,%s) RETURNING id", [purchase_id, product_id, quantity, unit_price])
                 detail_id = cursor.fetchone()[0]
                 cursor.execute("INSERT INTO lotes (id_detalle_compra,cantidad_inicial,cantidad_actual,fecha_vencimiento) VALUES (%s,%s,0,%s)", [detail_id, quantity, line.get("expiry_date") if product["perecible"] else None])
-        return Response(next(item for item in list_purchases() if item["id"] == purchase_id), status=201)
+        return Response(list_purchases(purchase_id=purchase_id)[0], status=201)
 
 
 class PurchaseActionView(AdminWriteMixin, APIView):
@@ -387,14 +765,18 @@ class PurchaseActionView(AdminWriteMixin, APIView):
         state = one("SELECT id FROM estados_compra WHERE nombre=%s", [new_state])
         with connection.cursor() as cursor:
             cursor.execute("UPDATE compras SET id_estado=%s WHERE id=%s", [state["id"], purchase_id])
-        return Response(next(item for item in list_purchases() if item["id"] == purchase_id))
+        return Response(list_purchases(purchase_id=purchase_id)[0])
+# ===== COMPRAS - ENDPOINTS Y ESTADOS: FIN =====
 
 
+# ===== GASTOS - ENDPOINT: INICIO =====
+# ExpensesView consulta una página de gastos o registra un nuevo gasto.
 class ExpensesView(AdminWriteMixin, APIView):
     admin_methods = {"GET", "POST"}
 
     def get(self, request):
-        return Response(rows("SELECT g.id,g.fecha,g.descripcion AS description,g.monto AS amount,g.id_categoria AS category_id,c.nombre AS category FROM gastos g JOIN categorias_gasto c ON c.id=g.id_categoria ORDER BY g.fecha DESC,g.id DESC"))
+        page, search = pagination_params(request)
+        return Response(list_expense_page(page, search))
 
     def post(self, request):
         data = object_payload(request.data)
@@ -408,13 +790,21 @@ class ExpensesView(AdminWriteMixin, APIView):
         with connection.cursor() as cursor:
             cursor.execute("INSERT INTO gastos (descripcion,id_categoria,monto,id_usuario) VALUES (%s,%s,%s,%s) RETURNING id", [description, category_id, amount, request.user.id])
             expense_id = cursor.fetchone()[0]
-        return Response(next(item for item in self.get(request).data if item["id"] == expense_id), status=201)
+        return Response(one("""
+            SELECT g.id,g.fecha,g.descripcion AS description,g.monto AS amount,
+                   g.id_categoria AS category_id,c.nombre AS category
+            FROM gastos g JOIN categorias_gasto c ON c.id=g.id_categoria
+            WHERE g.id=%s
+        """, [expense_id]), status=201)
+# ===== GASTOS - ENDPOINT: FIN =====
 
 
+# ===== REPORTES - ENDPOINT DE API SIN VISTA EN EL FRONTEND: INICIO =====
 class ReportsView(AdminWriteMixin, APIView):
     admin_methods = {"GET"}
-
     def get(self, request):
+        page, _ = pagination_params(request)
+        offset = (page - 1) * PAGE_SIZE
         start = request.query_params.get("from")
         end = request.query_params.get("to")
         try:
@@ -423,7 +813,11 @@ class ReportsView(AdminWriteMixin, APIView):
             if start and end and start > end: raise ValueError
         except ValueError:
             raise ValidationError({"detail": "Rango de fechas no válido."})
-        sales = rows("SELECT DATE(v.fecha) AS day,COALESCE(SUM(d.cantidad*d.precio_unitario),0) AS total,COUNT(DISTINCT v.id) AS count FROM ventas v LEFT JOIN detalle_ventas d ON d.id_venta=v.id WHERE (%s IS NULL OR v.fecha::date >= %s::date) AND (%s IS NULL OR v.fecha::date <= %s::date) GROUP BY DATE(v.fecha) ORDER BY day", [start,start,end,end])
+        sales_count = one("SELECT COUNT(DISTINCT DATE(v.fecha)) AS total FROM ventas v WHERE (%s IS NULL OR v.fecha::date >= %s::date) AND (%s IS NULL OR v.fecha::date <= %s::date)", [start,start,end,end])["total"]
+        purchases_count = one("SELECT COUNT(*) AS total FROM compras c WHERE (%s IS NULL OR c.fecha::date >= %s::date) AND (%s IS NULL OR c.fecha::date <= %s::date)", [start,start,end,end])["total"]
+        expenses_count = one("SELECT COUNT(*) AS total FROM gastos g WHERE (%s IS NULL OR g.fecha::date >= %s::date) AND (%s IS NULL OR g.fecha::date <= %s::date)", [start,start,end,end])["total"]
+        products_count = one("SELECT COUNT(*) AS total FROM productos WHERE activo=true")["total"]
+        sales = rows("SELECT DATE(v.fecha) AS day,COALESCE(SUM(d.cantidad*d.precio_unitario),0) AS total,COUNT(DISTINCT v.id) AS count FROM ventas v LEFT JOIN detalle_ventas d ON d.id_venta=v.id WHERE (%s IS NULL OR v.fecha::date >= %s::date) AND (%s IS NULL OR v.fecha::date <= %s::date) GROUP BY DATE(v.fecha) ORDER BY day DESC LIMIT %s OFFSET %s", [start,start,end,end,PAGE_SIZE,offset])
         expenses = one("SELECT COALESCE(SUM(monto),0) AS total FROM gastos WHERE (%s IS NULL OR fecha::date >= %s::date) AND (%s IS NULL OR fecha::date <= %s::date)", [start,start,end,end])
         purchases = one("SELECT COALESCE(SUM(dc.cantidad*dc.precio_unitario),0) AS total FROM compras c JOIN estados_compra ec ON ec.id=c.id_estado JOIN detalle_compras dc ON dc.id_compra=c.id WHERE ec.nombre='Entregado' AND (%s IS NULL OR c.fecha::date >= %s::date) AND (%s IS NULL OR c.fecha::date <= %s::date)", [start,start,end,end])
         cost_summary = one("""SELECT COALESCE(SUM(dvl.cantidad * dc.precio_unitario), 0) AS total
@@ -438,28 +832,39 @@ class ReportsView(AdminWriteMixin, APIView):
                                FROM ventas v JOIN detalle_ventas dv ON dv.id_venta = v.id
                                WHERE (%s IS NULL OR v.fecha::date >= %s::date) AND (%s IS NULL OR v.fecha::date <= %s::date)
                                  AND (SELECT COALESCE(SUM(dvl.cantidad), 0) FROM detalle_venta_lotes dvl WHERE dvl.id_detalle_venta = dv.id) < dv.cantidad""", [start,start,end,end])
-        purchase_rows = rows("SELECT c.id,c.fecha,p.nombre AS provider,ec.nombre AS state,COALESCE(SUM(dc.cantidad*dc.precio_unitario),0) AS total FROM compras c JOIN proveedores p ON p.id=c.id_proveedor JOIN estados_compra ec ON ec.id=c.id_estado LEFT JOIN detalle_compras dc ON dc.id_compra=c.id WHERE (%s IS NULL OR c.fecha::date >= %s::date) AND (%s IS NULL OR c.fecha::date <= %s::date) GROUP BY c.id,p.nombre,ec.nombre ORDER BY c.fecha DESC", [start,start,end,end])
-        expense_rows = rows("SELECT g.id,g.fecha,g.descripcion AS description,g.monto AS amount,c.nombre AS category FROM gastos g JOIN categorias_gasto c ON c.id=g.id_categoria WHERE (%s IS NULL OR g.fecha::date >= %s::date) AND (%s IS NULL OR g.fecha::date <= %s::date) ORDER BY g.fecha DESC", [start,start,end,end])
-        sales_total = sum((r["total"] for r in sales), Decimal("0"))
+        purchase_rows = rows("SELECT c.id,c.fecha,p.nombre AS provider,ec.nombre AS state,COALESCE(SUM(dc.cantidad*dc.precio_unitario),0) AS total FROM compras c JOIN proveedores p ON p.id=c.id_proveedor JOIN estados_compra ec ON ec.id=c.id_estado LEFT JOIN detalle_compras dc ON dc.id_compra=c.id WHERE (%s IS NULL OR c.fecha::date >= %s::date) AND (%s IS NULL OR c.fecha::date <= %s::date) GROUP BY c.id,p.nombre,ec.nombre ORDER BY c.fecha DESC,c.id DESC LIMIT %s OFFSET %s", [start,start,end,end,PAGE_SIZE,offset])
+        expense_rows = rows("SELECT g.id,g.fecha,g.descripcion AS description,g.monto AS amount,c.nombre AS category FROM gastos g JOIN categorias_gasto c ON c.id=g.id_categoria WHERE (%s IS NULL OR g.fecha::date >= %s::date) AND (%s IS NULL OR g.fecha::date <= %s::date) ORDER BY g.fecha DESC,g.id DESC LIMIT %s OFFSET %s", [start,start,end,end,PAGE_SIZE,offset])
+        sales_total = one(
+            "SELECT COALESCE(SUM(d.cantidad*d.precio_unitario),0) AS total "
+            "FROM ventas v LEFT JOIN detalle_ventas d ON d.id_venta=v.id "
+            "WHERE (%s IS NULL OR v.fecha::date >= %s::date) "
+            "AND (%s IS NULL OR v.fecha::date <= %s::date)",
+            [start, start, end, end],
+        )["total"]
         estimated_profit = sales_total - cost_summary["total"] - expenses["total"]
+        product_rows = list_product_page(page)["results"]
         return Response({"sales": sales, "sales_total": sales_total,
                          "cost_of_goods_sold": cost_summary["total"],
                          "expenses_total": expenses["total"],
                          "estimated_profit": estimated_profit,
                          "sales_without_complete_cost": missing_costs["count"],
                          "purchases_total": purchases["total"],
-                         "products": list_products(), "purchases": purchase_rows, "expenses": expense_rows})
+                         "products": product_rows, "purchases": purchase_rows, "expenses": expense_rows,
+                         "page": page, "page_size": PAGE_SIZE,
+                         "counts": {"sales": sales_count, "products": products_count,
+                                    "purchases": purchases_count, "expenses": expenses_count}})
+# ===== REPORTES - ENDPOINT DE API SIN VISTA EN EL FRONTEND: FIN =====
 
 
+# ===== RESUMEN - ENDPOINT DEL DASHBOARD: INICIO =====
+# Combina agregados del negocio con los catálogos autorizados para el rol actual.
 class DashboardView(APIView):
     def get(self, request):
         administrator = is_administrator(request.user)
-        products = list_products()
-        sales = list_sales(None if administrator else request.user.id, include_costs=administrator)
-        purchases = list_purchases() if administrator else []
-        expenses = self_expenses() if administrator else []
-        return Response({"products": products, "sales": sales, "purchases": purchases, "expenses": expenses, "references": ReferenceDataView().get(request).data})
-
-
-def self_expenses():
-    return rows("SELECT g.id,g.fecha,g.descripcion AS description,g.monto AS amount,g.id_categoria AS category_id,c.nombre AS category FROM gastos g JOIN categorias_gasto c ON c.id=g.id_categoria ORDER BY g.fecha DESC,g.id DESC")
+        summary = dashboard_summary(
+            user_id=None if administrator else request.user.id,
+            include_financials=administrator,
+        )
+        summary["references"] = ReferenceDataView().get(request).data
+        return Response(summary)
+# ===== RESUMEN - ENDPOINT DEL DASHBOARD: FIN =====

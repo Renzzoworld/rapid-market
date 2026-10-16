@@ -235,33 +235,6 @@ body {
   color: #6b7280;
 }
 
-.reports-panel {
-  display: flex;
-  justify-content: center;
-  padding-top: 70px;
-}
-
-.reports-form {
-  width: min(680px, 100%);
-  padding: 30px;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.05);
-}
-
-.reports-date-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-.reports-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 8px;
-}
-
 /* =========================
    TARJETAS DEL DASHBOARD
    ========================= */
@@ -447,6 +420,43 @@ body {
 
 .inventory-toolbar input:focus {
   border-color: #2563eb;
+}
+
+.inventory-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.inventory-page-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.inventory-page-buttons button {
+  min-width: 38px;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  color: #374151;
+  cursor: pointer;
+}
+
+.inventory-page-buttons button.active {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.inventory-page-buttons button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .table-container {
@@ -862,13 +872,41 @@ body {
   top: calc(100% + 4px);
   left: 0;
   right: 0;
-  max-height: 190px;
-  overflow-y: auto;
   background: white;
   border: 1px solid #d1d5db;
   border-radius: 8px;
   box-shadow: 0 8px 18px rgba(17, 24, 39, 0.12);
   z-index: 10;
+}
+
+.product-suggestions-list {
+  max-height: 190px;
+  overflow-y: auto;
+}
+
+.product-suggestions-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px;
+  border-top: 1px solid #e5e7eb;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.product-suggestions-pagination button {
+  padding: 5px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  background: white;
+  color: #374151;
+  cursor: pointer;
+}
+
+.product-suggestions-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .product-suggestion {
@@ -1161,13 +1199,15 @@ body {
     width: 100%;
   }
 
+  .inventory-pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .form-row {
     grid-template-columns: 1fr;
   }
 
-  .reports-date-row {
-    grid-template-columns: 1fr;
-  }
 }
 /* =========================
    GRÁFICO DE VENTAS

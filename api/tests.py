@@ -8,7 +8,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 from api.authentication import RapidMarketJWTAuthentication
 from api.permissions import IsAdministrator
-from api.views import DashboardView, LoginView, PurchasesView, ReportsView, SalesView
+from api.views import DashboardView, LoginView, ProductDetailView, ProductListView, PurchasesView, ReportsView, SalesView, list_product_page
 
 
 class LoginViewTests(SimpleTestCase):
@@ -75,22 +75,81 @@ class RoleAccessTests(SimpleTestCase):
 
     def test_vendor_dashboard_does_not_include_admin_financial_data(self):
         safe_references = Response({"units": [], "providers": [], "payment_methods": [], "sale_types": [], "expense_categories": []})
-        with patch("api.views.list_products", return_value=[]), \
-             patch("api.views.list_sales", return_value=[]) as list_sales, \
-             patch("api.views.list_purchases") as list_purchases, \
-             patch("api.views.self_expenses") as self_expenses, \
+        dashboard = {
+            "summary": {"sales_total": 0},
+            "low_stock_products": [],
+        }
+        with patch("api.views.dashboard_summary", return_value=dashboard) as dashboard_summary, \
              patch("api.views.ReferenceDataView.get", return_value=safe_references):
             response = DashboardView.as_view()(self.vendor_request("/api/dashboard/"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["purchases"], [])
-        self.assertEqual(response.data["expenses"], [])
-        list_sales.assert_called_once_with(19, include_costs=False)
-        list_purchases.assert_not_called()
-        self_expenses.assert_not_called()
+        self.assertEqual(response.data["summary"], dashboard["summary"])
+        self.assertEqual(response.data["low_stock_products"], [])
+        dashboard_summary.assert_called_once_with(user_id=19, include_financials=False)
 
     def test_vendor_sales_history_is_limited_to_own_sales(self):
-        with patch("api.views.list_sales", return_value=[]) as list_sales:
+        paginated_sales = {"results": [], "count": 0, "page": 1, "page_size": 10}
+        with patch("api.views.list_sales_page", return_value=paginated_sales) as list_sales_page:
             response = SalesView.as_view()(self.vendor_request("/api/sales/"))
         self.assertEqual(response.status_code, 200)
-        list_sales.assert_called_once_with(19, include_costs=False)
+        list_sales_page.assert_called_once_with(19, False, 1, "")
+
+
+class ProductPaginationTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.user = SimpleNamespace(id=19, is_authenticated=True, role_name="Vendedor")
+
+    def test_product_list_returns_requested_page_and_search(self):
+        page_data = {"results": [], "count": 23, "page": 2, "page_size": 10}
+        request = self.factory.get("/api/products/?page=2&search=arroz")
+        force_authenticate(request, user=self.user)
+        with patch("api.views.list_product_page", return_value=page_data) as list_page:
+            response = ProductListView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, page_data)
+        list_page.assert_called_once_with(2, "arroz")
+
+    def test_product_list_rejects_invalid_page(self):
+        request = self.factory.get("/api/products/?page=0")
+        force_authenticate(request, user=self.user)
+        response = ProductListView.as_view()(request)
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_product_page_queries_only_ten_rows(self):
+        with patch("api.views.one", return_value={"total": 25}), \
+             patch("api.views.rows", return_value=[]) as query_rows:
+            result = list_product_page(2, "arroz")
+
+        self.assertEqual(result, {"results": [], "count": 25, "page": 2, "page_size": 10})
+        self.assertIn("LIMIT %s OFFSET %s", query_rows.call_args.args[0])
+        self.assertEqual(query_rows.call_args.args[1], ["%arroz%", 10, 10])
+
+    def test_product_details_load_lots_independently_of_purchase_page(self):
+        product = {
+            "id": 5,
+            "name": "Leche",
+            "price": 2,
+            "perishable": True,
+            "min_stock": 5,
+            "active": True,
+            "unit_id": 1,
+            "unit": "Unidad",
+            "unit_abbr": "und",
+            "stock": 10,
+            "lot_count": 2,
+        }
+        lots = [{"lot_id": 14}, {"lot_id": 15}]
+        request = self.factory.get("/api/products/5/")
+        force_authenticate(request, user=self.user)
+
+        with patch("api.views.get_product", return_value=product), \
+             patch("api.views.list_product_lots", return_value=lots) as list_lots:
+            response = ProductDetailView.as_view()(request, product_id=5)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["lots"], lots)
+        list_lots.assert_called_once_with(5)
