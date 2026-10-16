@@ -31,7 +31,7 @@ Aplicacion de gestion con frontend React/Vite y backend Django REST Framework.
 
 	```powershell
 	python -m venv .venv
-	.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+	.\.venv\Scripts\python.exe -m pip install -r backend-django\requirements.txt
 	```
 
 6. Solo para una base nueva, inicializa las tablas propias de Rapid Market con el esquema compatible con PostgreSQL 16:
@@ -45,28 +45,28 @@ Aplicacion de gestion con frontend React/Vite y backend Django REST Framework.
 7. Crea las tablas de Django:
 
 	```powershell
-	.\.venv\Scripts\python.exe manage.py migrate
+	.\.venv\Scripts\python.exe backend-django\manage.py migrate
 	```
 
 8. Crea los catálogos iniciales que necesita la aplicación:
 
 	```powershell
-	.\.venv\Scripts\python.exe manage.py seed_initial_data
+	.\.venv\Scripts\python.exe backend-django\manage.py seed_initial_data
 	```
 
 9. Instala las dependencias del frontend:
 
 	```powershell
-	npm ci
+	npm --prefix frontend-react ci
 	```
 
 10. Crea la cuenta de aplicación que usarás para entrar:
 
 	```powershell
-	.\.venv\Scripts\python.exe crear_usuario_app.py
+	.\.venv\Scripts\python.exe backend-django\crear_usuario_app.py
 	```
 
-	Elige el rol Administrador o Vendedor y escribe una contraseña de al menos 12 caracteres. Se solicita dos veces y no se muestra en pantalla. `createsuperuser` crea una cuenta Django distinta y no sirve para el login de Rapid Market. Si ya tienes una cuenta local, cambia su contraseña ejecutando `cambiar_password_app.py`.
+	Elige el rol Administrador o Vendedor y escribe una contraseña de al menos 12 caracteres. Se solicita dos veces y no se muestra en pantalla. `createsuperuser` crea una cuenta Django distinta y no sirve para el login de Rapid Market. Si ya tienes una cuenta local, cambia su contraseña ejecutando `backend-django\cambiar_password_app.py`.
 
 ## Ejecutar el sistema
 
@@ -75,13 +75,13 @@ Asegurate de que PostgreSQL este iniciado. Abre dos terminales en la carpeta del
 En la primera:
 
 ```powershell
-.\.venv\Scripts\python.exe manage.py runserver 127.0.0.1:8000
+.\.venv\Scripts\python.exe backend-django\manage.py runserver 127.0.0.1:8000
 ```
 
 En la segunda:
 
 ```powershell
-npm run dev
+npm --prefix frontend-react run dev
 ```
 
 Abre la URL que indique Vite, normalmente `http://localhost:5173`.
@@ -92,7 +92,7 @@ No vuelvas a crear el entorno ni a instalar dependencias. Inicia PostgreSQL y ej
 
 El frontend y las operaciones de inventario, ventas, compras, gastos y reportes leen/escriben PostgreSQL a través de la API Django. Las ventas descuentan stock desde lotes disponibles; la recepción de una compra agrega ese lote al stock.
 
-El Administrador puede consultar todas las áreas. El Vendedor consulta productos y stock, registra ventas y ve su propio historial; compras, gastos, costos y reportes quedan restringidos al Administrador. Para crear la cuenta Vendedor, ejecuta `seed_initial_data` y luego `crear_usuario_app.py`.
+El Administrador puede consultar todas las áreas. El Vendedor consulta productos y stock, registra ventas y ve su propio historial; compras, gastos, costos y reportes quedan restringidos al Administrador. Para crear la cuenta Vendedor, ejecuta `seed_initial_data` y luego `backend-django\crear_usuario_app.py`.
 
 ## Seguridad
 
@@ -104,7 +104,7 @@ Se aplicaron controles básicos inspirados en OWASP API Security Top 10 y ASVS. 
 - `.env.example` es una plantilla sin credenciales reales y si se sube.
 - `.venv`, `venv`, `node_modules` y `dist` se generan localmente y estan excluidos por `.gitignore`.
 - `database_schema.sql` contiene solo el esquema. No incluyas respaldos con usuarios, hashes de contrasenas o datos reales.
-- `package-lock.json` y `requirements.txt` se versionan para reproducir las dependencias.
+- `frontend-react\package-lock.json` y `backend-django\requirements.txt` se versionan para reproducir las dependencias.
 
 ## Vite template notes
 

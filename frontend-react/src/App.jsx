@@ -186,6 +186,12 @@ function App() {
     setUsuario("");
     setPassword("");
     setSeccion("inicio");
+    setProductosVentaOpciones([]);
+    setProductosCompraOpciones([]);
+    setTotalProductosVentaOpciones(0);
+    setTotalProductosCompraOpciones(0);
+    setCargandoProductosVenta(false);
+    setCargandoProductosCompra(false);
   };
   // ===== LOGIN - INICIO Y CIERRE DE SESIÓN: FIN =====
 
@@ -294,6 +300,42 @@ function App() {
     monto: "",
   });
   // ===== ESTADO DE MÓDULOS: FIN =====
+
+  const actualizarBusquedaProductoVenta = (busqueda) => {
+    setBusquedaProductoVenta(busqueda);
+    if (!busqueda.trim()) {
+      setProductosVentaOpciones([]);
+      setTotalProductosVentaOpciones(0);
+      setCargandoProductosVenta(false);
+    }
+  };
+
+  const actualizarBusquedaProductoCompra = (busqueda) => {
+    setBusquedaProductoCompra(busqueda);
+    if (!busqueda.trim()) {
+      setProductosCompraOpciones([]);
+      setTotalProductosCompraOpciones(0);
+      setCargandoProductosCompra(false);
+    }
+  };
+
+  const cambiarMostrarVenta = (mostrar) => {
+    setMostrarVenta(mostrar);
+    if (!mostrar) {
+      setProductosVentaOpciones([]);
+      setTotalProductosVentaOpciones(0);
+      setCargandoProductosVenta(false);
+    }
+  };
+
+  const cambiarMostrarCompra = (mostrar) => {
+    setMostrarCompra(mostrar);
+    if (!mostrar) {
+      setProductosCompraOpciones([]);
+      setTotalProductosCompraOpciones(0);
+      setCargandoProductosCompra(false);
+    }
+  };
 
   // ===== INVENTARIO - OPERACIONES: INICIO =====
   // Abre el formulario de alta y prepara sus campos.
@@ -473,8 +515,7 @@ const abrirNuevoProducto = () => {
       productoId: "",
       cantidad: 1,
     });
-    setBusquedaProductoVenta("");
-    setProductosVentaOpciones([]);
+    actualizarBusquedaProductoVenta("");
   };
 
   const agregarProductoCompra = () => {
@@ -510,8 +551,7 @@ const abrirNuevoProducto = () => {
       cantidad: 1,
       precioUnitario: "",
     });
-    setBusquedaProductoCompra("");
-    setProductosCompraOpciones([]);
+    actualizarBusquedaProductoCompra("");
   };
 
   const cambiarCantidadProductoCompra = (indice, cambio) => {
@@ -605,7 +645,7 @@ const abrirNuevoProducto = () => {
       setPaginaVentas(1);
       setRevisionVentas((revision) => revision + 1);
       setRevisionInventario((revision) => revision + 1);
-      setCarritoVenta([]); setMostrarVenta(false);
+      setCarritoVenta([]); cambiarMostrarVenta(false);
       setNuevaVenta({ productoId: "", cantidad: 1, tipo: "Minorista", pago: "Efectivo" });
     } catch (error) { alert(error.message); }
   };
@@ -628,7 +668,7 @@ const abrirNuevoProducto = () => {
       setPaginaCompras(1);
       setRevisionCompras((revision) => revision + 1);
       setRevisionInventario((revision) => revision + 1);
-      setCarritoCompra([]); setMostrarCompra(false);
+      setCarritoCompra([]); cambiarMostrarCompra(false);
       setNuevaCompra({ proveedor: "", productoId: "", cantidad: 1, precioUnitario: "" });
     } catch (error) { alert(error.message); }
   };
@@ -800,12 +840,7 @@ const abrirNuevoProducto = () => {
 
   // ===== VENTAS - BÚSQUEDA DE PRODUCTOS PARA EL FORMULARIO: INICIO =====
   useEffect(() => {
-    if (!logueado || !mostrarVenta || !busquedaProductoVenta.trim()) {
-      setProductosVentaOpciones([]);
-      setTotalProductosVentaOpciones(0);
-      setCargandoProductosVenta(false);
-      return undefined;
-    }
+    if (!logueado || !mostrarVenta || !busquedaProductoVenta.trim()) return undefined;
     let vigente = true;
     const query = new URLSearchParams({ page: String(paginaProductosVenta), search: busquedaProductoVenta.trim() });
     const timer = setTimeout(() => {
@@ -826,12 +861,7 @@ const abrirNuevoProducto = () => {
 
   // ===== COMPRAS - BÚSQUEDA DE PRODUCTOS PARA EL FORMULARIO: INICIO =====
   useEffect(() => {
-    if (!logueado || !mostrarCompra || !busquedaProductoCompra.trim()) {
-      setProductosCompraOpciones([]);
-      setTotalProductosCompraOpciones(0);
-      setCargandoProductosCompra(false);
-      return undefined;
-    }
+    if (!logueado || !mostrarCompra || !busquedaProductoCompra.trim()) return undefined;
     let vigente = true;
     const query = new URLSearchParams({ page: String(paginaProductosCompra), search: busquedaProductoCompra.trim() });
     const timer = setTimeout(() => {
@@ -870,8 +900,8 @@ const abrirNuevoProducto = () => {
   const contextoAplicacion = {
     estadoResumen: { costosVentasIncompletos, esAdministrador, gananciaEstimada, obtenerCodigoVenta, resumenDashboard, seccion, stockBajo, totalVentas, ventasDashboard, ventasPorFechaRecientes },
     estadoInventario: { abrirEditarProducto, abrirNuevoProducto, busqueda, cargandoInventario, compras, eliminarProducto, errorInventario, esAdministrador, guardarProducto, mostrarFormulario, nuevoProducto, obtenerCodigoLote, obtenerLotesProducto, paginaInventario, paginasInventario, productoEditando, productoInventarioSeleccionado, productosFiltrados, resumenDashboard, seccion, setBusqueda, setMostrarFormulario, setNuevoProducto, setPaginaInventario, setProductoInventarioSeleccionado, totalPaginasInventario, totalProductosInventario, verDetallesProducto },
-    estadoVentas: { agregarProductoVenta, busquedaProductoVenta, busquedaVentas, cambiarCantidadProductoVenta, cargandoProductosVenta, cargandoVentas, carritoVenta, errorVentas, factorPrecioVenta, mostrarVenta, nuevaVenta, obtenerCodigoVenta, obtenerProductosVenta, paginaProductosVenta, paginaVentas, productoSeleccionadoVenta, productosVentaFiltrados, registrarVenta, resumenDashboard, seccion, setBusquedaProductoVenta, setBusquedaVentas, setCarritoVenta, setMostrarVenta, setNuevaVenta, setPaginaProductosVenta, setPaginaVentas, setProductosVentaOpciones, setTotalProductosVentaOpciones, setVentaSeleccionada, totalCarritoVenta, totalProductosVentaOpciones, totalVentas, totalVentasRegistros, ventaSeleccionada, ventas, ventasFiltradas },
-    estadoCompras: { agregarProductoCompra, busquedaCompras, busquedaProductoCompra, busquedaProveedorCompra, calcularTotalCompra, cambiarCantidadProductoCompra, cancelarCompra, cargandoCompras, cargandoProductosCompra, carritoCompra, compraCancelando, compraSeleccionada, compraVerificando, compras, comprasFiltradas, errorCompras, esAdministrador, fechasVencimiento, guardarProveedor, mostrarCompra, mostrarProveedorNuevo, nombreProveedorNuevo, nuevaCompra, obtenerCodigoCompra, obtenerCodigoLote, obtenerEstadoCompra, obtenerLotesCompra, paginaCompras, paginaProductosCompra, productoSeleccionadoCompra, productosCompraFiltrados, proveedores, proveedoresFiltrados, registrarCompra, resumenDashboard, seccion, setBusquedaCompras, setBusquedaProductoCompra, setBusquedaProveedorCompra, setCarritoCompra, setCompraCancelando, setCompraSeleccionada, setCompraVerificando, setFechasVencimiento, setMostrarCompra, setMostrarProveedorNuevo, setNombreProveedorNuevo, setNuevaCompra, setPaginaCompras, setPaginaProductosCompra, setProductosCompraOpciones, setTotalProductosCompraOpciones, totalCarritoCompra, totalCompras, totalComprasRegistros, totalProductosCompraOpciones, validarCompra },
+    estadoVentas: { agregarProductoVenta, busquedaProductoVenta, busquedaVentas, cambiarCantidadProductoVenta, cargandoProductosVenta, cargandoVentas, carritoVenta, errorVentas, factorPrecioVenta, mostrarVenta, nuevaVenta, obtenerCodigoVenta, obtenerProductosVenta, paginaProductosVenta, paginaVentas, productoSeleccionadoVenta, productosVentaFiltrados, registrarVenta, resumenDashboard, seccion, setBusquedaVentas, setCarritoVenta, setNuevaVenta, setPaginaProductosVenta, setPaginaVentas, setProductosVentaOpciones, setTotalProductosVentaOpciones, setVentaSeleccionada, setBusquedaProductoVenta: actualizarBusquedaProductoVenta, setMostrarVenta: cambiarMostrarVenta, totalCarritoVenta, totalProductosVentaOpciones, totalVentas, totalVentasRegistros, ventaSeleccionada, ventas, ventasFiltradas },
+    estadoCompras: { agregarProductoCompra, busquedaCompras, busquedaProductoCompra, busquedaProveedorCompra, calcularTotalCompra, cambiarCantidadProductoCompra, cancelarCompra, cargandoCompras, cargandoProductosCompra, carritoCompra, compraCancelando, compraSeleccionada, compraVerificando, compras, comprasFiltradas, errorCompras, esAdministrador, fechasVencimiento, guardarProveedor, mostrarCompra, mostrarProveedorNuevo, nombreProveedorNuevo, nuevaCompra, obtenerCodigoCompra, obtenerCodigoLote, obtenerEstadoCompra, obtenerLotesCompra, paginaCompras, paginaProductosCompra, productoSeleccionadoCompra, productosCompraFiltrados, proveedores, proveedoresFiltrados, registrarCompra, resumenDashboard, seccion, setBusquedaCompras, setBusquedaProductoCompra: actualizarBusquedaProductoCompra, setMostrarCompra: cambiarMostrarCompra, setBusquedaProveedorCompra, setCarritoCompra, setCompraCancelando, setCompraSeleccionada, setCompraVerificando, setFechasVencimiento, setMostrarProveedorNuevo, setNombreProveedorNuevo, setNuevaCompra, setPaginaCompras, setPaginaProductosCompra, setProductosCompraOpciones, setTotalProductosCompraOpciones, totalCarritoCompra, totalCompras, totalComprasRegistros, totalProductosCompraOpciones, validarCompra },
     estadoGastos: { busquedaGastos, cargandoGastos, errorGastos, esAdministrador, gastos, gastosFiltrados, mostrarGasto, nuevoGasto, paginaGastos, registrarGasto, resumenDashboard, seccion, setBusquedaGastos, setMostrarGasto, setNuevoGasto, setPaginaGastos, totalGastos, totalGastosRegistros }
   };
 
