@@ -1,9 +1,12 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
-from .vistas import (
-    DashboardView, ExpensesView, LoginView, LogoutView, ProductDetailView, ProductListView,
-    PurchaseActionView, PurchasesView, ProvidersView, ReferenceDataView, ReportsView, SalesView,
-)
+from .modulos.autenticacion.vistas import LoginView, LogoutView
+from .modulos.compras.vistas import PurchaseActionView, PurchasesView
+from .modulos.gastos.vistas import ExpensesView
+from .modulos.inventario.vistas import ProductDetailView, ProductListView
+from .modulos.referencias.vistas import ProvidersView, ReferenceDataView
+from .modulos.reportes.vistas import DashboardView, ReportsView
+from .modulos.ventas.vistas import SalesView
 
 urlpatterns = [
     path('login/', LoginView.as_view(), name='login'),
