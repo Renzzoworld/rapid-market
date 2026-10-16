@@ -1,12 +1,12 @@
 import { useContextoAplicacion } from "../../contexto/useContextoAplicacion.js";
 
-export function Inicio() {
+export function Resumen() {
   const { estadoResumen } = useContextoAplicacion();
   const { costosVentasIncompletos, esAdministrador, gananciaEstimada, obtenerCodigoVenta, resumenDashboard, seccion, stockBajo, totalVentas, ventasDashboard, ventasPorFechaRecientes } = estadoResumen;
 
   return (
     <>
-        {seccion === "inicio" && (
+        {seccion === "resumen" && (
           <>
             <div className="page-header">
               <div>
