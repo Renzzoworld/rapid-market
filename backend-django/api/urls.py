@@ -1,6 +1,6 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
-from .views import (
+from .vistas import (
     DashboardView, ExpensesView, LoginView, LogoutView, ProductDetailView, ProductListView,
     PurchaseActionView, PurchasesView, ProvidersView, ReferenceDataView, ReportsView, SalesView,
 )
