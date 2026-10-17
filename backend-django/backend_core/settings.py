@@ -52,7 +52,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
-    'api',
+    'servicios.apps.ServiciosConfig',
 ]
 
 MIDDLEWARE = [
@@ -159,7 +159,7 @@ CORS_ALLOWED_ORIGINS = [
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'api.authentication.RapidMarketJWTAuthentication',
+        'servicios.authentication.RapidMarketJWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated', # Por defecto protege las rutas

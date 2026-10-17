@@ -90,9 +90,9 @@ Abre la URL que indique Vite, normalmente `http://localhost:5173`.
 
 No vuelvas a crear el entorno ni a instalar dependencias. Inicia PostgreSQL y ejecuta los dos comandos de servidor en terminales separadas.
 
-El frontend y las operaciones de inventario, ventas, compras, gastos y reportes leen/escriben PostgreSQL a través de la API Django. Las ventas descuentan stock desde lotes disponibles; la recepción de una compra agrega ese lote al stock.
+El frontend y las operaciones de inventario, ventas, compras y gastos leen/escriben PostgreSQL a través de la API Django. Las ventas descuentan stock desde lotes disponibles; la recepción de una compra agrega ese lote al stock.
 
-El Administrador puede consultar todas las áreas. El Vendedor consulta productos y stock, registra ventas y ve su propio historial; compras, gastos, costos y reportes quedan restringidos al Administrador. Para crear la cuenta Vendedor, ejecuta `seed_initial_data` y luego `backend-django\crear_usuario_app.py`.
+El Administrador puede consultar todas las áreas. El Vendedor consulta productos y stock, registra ventas y ve su propio historial; compras, gastos y costos quedan restringidos al Administrador. Para crear la cuenta Vendedor, ejecuta `seed_initial_data` y luego `backend-django\crear_usuario_app.py`.
 
 ## Seguridad
 

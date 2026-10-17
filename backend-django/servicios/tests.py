@@ -6,14 +6,14 @@ from django.test import SimpleTestCase
 from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from api.authentication import RapidMarketJWTAuthentication
-from api.permissions import IsAdministrator
-from api.modulos.autenticacion.vistas import LoginView
-from api.modulos.compras.vistas import PurchasesView
-from api.modulos.inventario.vistas import ProductDetailView, ProductListView
-from api.modulos.reportes.vistas import DashboardView, ReportsView
-from api.modulos.ventas.vistas import SalesView
-from api.modulos.inventario.repositorio import list_product_page
+from servicios.authentication import RapidMarketJWTAuthentication
+from servicios.permissions import IsAdministrator
+from servicios.modulos.autenticacion.vistas import LoginView
+from servicios.modulos.compras.vistas import PurchasesView
+from servicios.modulos.inventario.vistas import ProductDetailView, ProductListView
+from servicios.modulos.resumen.vistas import DashboardView
+from servicios.modulos.ventas.vistas import SalesView
+from servicios.modulos.inventario.repositorio import list_product_page
 
 
 class LoginViewTests(SimpleTestCase):
@@ -22,7 +22,7 @@ class LoginViewTests(SimpleTestCase):
 
     def test_login_accepts_hashed_database_password_and_returns_role(self):
         row = (7, "admin", "Administrador", make_password("correct-password"), True, 1, "Administrador")
-        with patch("api.modulos.autenticacion.servicios.usuario_por_nombre", return_value=row):
+        with patch("servicios.modulos.autenticacion.servicios.usuario_por_nombre", return_value=row):
             request = self.factory.post("/api/login/", {"username": "admin", "password": "correct-password"}, format="json")
             response = LoginView.as_view()(request)
         self.assertEqual(response.status_code, 200)
@@ -32,27 +32,27 @@ class LoginViewTests(SimpleTestCase):
 
     def test_login_rejects_wrong_password(self):
         row = (7, "admin", "Administrador", make_password("correct-password"), True, 1, "Administrador")
-        with patch("api.modulos.autenticacion.servicios.usuario_por_nombre", return_value=row):
+        with patch("servicios.modulos.autenticacion.servicios.usuario_por_nombre", return_value=row):
             request = self.factory.post("/api/login/", {"username": "admin", "password": "wrong"}, format="json")
             response = LoginView.as_view()(request)
         self.assertEqual(response.status_code, 401)
 
     def test_login_rejects_legacy_plaintext_password(self):
         row = (7, "admin", "Administrador", "legacy-password", True, 1, "Administrador")
-        with patch("api.modulos.autenticacion.servicios.usuario_por_nombre", return_value=row):
+        with patch("servicios.modulos.autenticacion.servicios.usuario_por_nombre", return_value=row):
             request = self.factory.post("/api/login/", {"username": "admin", "password": "legacy-password"}, format="json")
             response = LoginView.as_view()(request)
         self.assertEqual(response.status_code, 401)
 
     def test_login_rejects_inactive_user(self):
         row = (7, "admin", "Administrador", make_password("correct-password"), False, 1, "Administrador")
-        with patch("api.modulos.autenticacion.servicios.usuario_por_nombre", return_value=row):
+        with patch("servicios.modulos.autenticacion.servicios.usuario_por_nombre", return_value=row):
             request = self.factory.post("/api/login/", {"username": "admin", "password": "correct-password"}, format="json")
             response = LoginView.as_view()(request)
         self.assertEqual(response.status_code, 401)
 
     def test_jwt_resolves_database_user_by_numeric_id(self):
-        with patch("api.authentication.lookup_database_user_by_id", return_value=(7, "admin", "Administrador", True, 1, "Administrador")):
+        with patch("servicios.authentication.lookup_database_user_by_id", return_value=(7, "admin", "Administrador", True, 1, "Administrador")):
             user = RapidMarketJWTAuthentication().get_user({"user_id": 7})
         self.assertEqual(user.id, 7)
         self.assertTrue(user.is_authenticated)
@@ -72,11 +72,9 @@ class RoleAccessTests(SimpleTestCase):
         force_authenticate(request, user=self.vendor)
         return request
 
-    def test_vendor_cannot_read_purchases_or_reports(self):
+    def test_vendor_cannot_read_purchases(self):
         purchases = PurchasesView.as_view()(self.vendor_request("/api/purchases/"))
-        reports = ReportsView.as_view()(self.vendor_request("/api/reports/"))
         self.assertEqual(purchases.status_code, 403)
-        self.assertEqual(reports.status_code, 403)
 
     def test_vendor_dashboard_does_not_include_admin_financial_data(self):
         safe_references = Response({"units": [], "providers": [], "payment_methods": [], "sale_types": [], "expense_categories": []})
@@ -84,8 +82,8 @@ class RoleAccessTests(SimpleTestCase):
             "summary": {"sales_total": 0},
             "low_stock_products": [],
         }
-        with patch("api.modulos.reportes.servicios.dashboard_summary", return_value=dashboard) as dashboard_summary, \
-             patch("api.modulos.reportes.vistas.obtener_referencias", return_value=safe_references.data):
+        with patch("servicios.modulos.resumen.servicios.dashboard_summary", return_value=dashboard) as dashboard_summary, \
+             patch("servicios.modulos.resumen.vistas.obtener_referencias", return_value=safe_references.data):
             response = DashboardView.as_view()(self.vendor_request("/api/dashboard/"))
 
         self.assertEqual(response.status_code, 200)
@@ -95,7 +93,7 @@ class RoleAccessTests(SimpleTestCase):
 
     def test_vendor_sales_history_is_limited_to_own_sales(self):
         paginated_sales = {"results": [], "count": 0, "page": 1, "page_size": 10}
-        with patch("api.modulos.ventas.servicios.list_sales_page", return_value=paginated_sales) as list_sales_page:
+        with patch("servicios.modulos.ventas.servicios.list_sales_page", return_value=paginated_sales) as list_sales_page:
             response = SalesView.as_view()(self.vendor_request("/api/sales/"))
         self.assertEqual(response.status_code, 200)
         list_sales_page.assert_called_once_with(19, False, 1, "")
@@ -110,7 +108,7 @@ class ProductPaginationTests(SimpleTestCase):
         page_data = {"results": [], "count": 23, "page": 2, "page_size": 10}
         request = self.factory.get("/api/products/?page=2&search=arroz")
         force_authenticate(request, user=self.user)
-        with patch("api.modulos.inventario.servicios.list_product_page", return_value=page_data) as list_page:
+        with patch("servicios.modulos.inventario.servicios.list_product_page", return_value=page_data) as list_page:
             response = ProductListView.as_view()(request)
 
         self.assertEqual(response.status_code, 200)
@@ -125,8 +123,8 @@ class ProductPaginationTests(SimpleTestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_product_page_queries_only_ten_rows(self):
-        with patch("api.modulos.inventario.repositorio.one", return_value={"total": 25}), \
-             patch("api.modulos.inventario.repositorio.rows", return_value=[]) as query_rows:
+        with patch("servicios.modulos.inventario.repositorio.one", return_value={"total": 25}), \
+             patch("servicios.modulos.inventario.repositorio.rows", return_value=[]) as query_rows:
             result = list_product_page(2, "arroz")
 
         self.assertEqual(result, {"results": [], "count": 25, "page": 2, "page_size": 10})
@@ -151,8 +149,8 @@ class ProductPaginationTests(SimpleTestCase):
         request = self.factory.get("/api/products/5/")
         force_authenticate(request, user=self.user)
 
-        with patch("api.modulos.inventario.servicios.get_product", return_value=product), \
-             patch("api.modulos.inventario.servicios.list_product_lots", return_value=lots) as list_lots:
+        with patch("servicios.modulos.inventario.servicios.get_product", return_value=product), \
+             patch("servicios.modulos.inventario.servicios.list_product_lots", return_value=lots) as list_lots:
             response = ProductDetailView.as_view()(request, product_id=5)
 
         self.assertEqual(response.status_code, 200)

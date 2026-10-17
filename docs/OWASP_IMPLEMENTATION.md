@@ -6,7 +6,7 @@ Rapid Market es un proyecto académico local. Esta lista documenta controles con
 
 - **Autenticación y contraseñas (API2, ASVS V2):** login con errores genéricos y límite de cinco intentos por minuto según la IP; las contraseñas se verifican con los hashers de Django. Se eliminó la compatibilidad que aceptaba contraseñas en texto plano. Los scripts de alta y cambio de contraseña aplican longitud mínima de 12 caracteres y los validadores de contraseña de Django.
 - **Tokens:** JWT de acceso de una hora; refresh de un día con rotación y lista de revocación. El backend vuelve a consultar al usuario y su estado/rol en cada petición autenticada. El frontend mantiene los tokens solo en memoria y renueva el acceso con el refresh.
-- **Autorización por rol (API1, API5):** todas las rutas de datos requieren JWT. Administrador puede consultar y administrar todas las áreas. Vendedor puede consultar productos/stock y registrar ventas; solo recibe sus propias ventas y no recibe compras, gastos, reportes ni costos de compra. La API bloquea la lectura de compras y reportes para Vendedor; el frontend también oculta esas secciones. La protección está en el backend, así que ocultar botones no es la única barrera.
+- **Autorización por rol (API1, API5):** todas las rutas de datos requieren JWT. Administrador puede consultar y administrar todas las áreas. Vendedor puede consultar productos/stock y registrar ventas; solo recibe sus propias ventas y no recibe compras, gastos ni costos de compra. La API bloquea la lectura de compras para Vendedor; el frontend también oculta esas secciones. La protección está en el backend, así que ocultar botones no es la única barrera.
 - **Validación y consultas (API3, API8):** datos numéricos, nombres, ids, fechas y cantidades se validan en el backend. El SQL parametriza valores. Las ventas y la recepción de compras son transaccionales; las ventas bloquean y consumen lotes disponibles ordenados por vencimiento/antigüedad.
 - **Configuración:** secretos y conexión PostgreSQL se leen desde `.env` ignorado por Git; `DEBUG` está apagado en `.env.example`; CORS queda limitado a los orígenes de Vite; se habilitan cabeceras de seguridad. HTTPS/HSTS deben configurarse al desplegar con TLS.
 - **Uso de recursos y errores (API4, API7):** el backend limita líneas por operación a 100, longitud de campos y tamaño lógico de credenciales, y valida acciones/estados antes de modificar datos. Los errores de autenticación no revelan si existe una cuenta.
@@ -29,7 +29,7 @@ Rapid Market es un proyecto académico local. Esta lista documenta controles con
 | Registrar ventas | Sí | Sí |
 | Ver historial de ventas | Todas | Solo las propias |
 | Ver costos de compra en ventas | Sí | No |
-| Ver compras, gastos y reportes | Sí | No |
+| Ver compras y gastos | Sí | No |
 | Registrar compras o gastos | Sí | No |
 
 El script `crear_usuario_app.py` permite elegir el rol al crear una cuenta. Ejecuta `seed_initial_data` para asegurar que exista el catálogo de roles antes de crear la cuenta.

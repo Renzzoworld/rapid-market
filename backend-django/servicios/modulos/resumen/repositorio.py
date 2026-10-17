@@ -1,42 +1,5 @@
 from ...compartido.repositorio_base import one, rows
 from ..ventas.repositorio import list_sales
-from ..inventario.repositorio import list_product_page
-
-
-def report_data(start, end, page, page_size):
-    offset = (page - 1) * page_size
-    params = [start, start, end, end]
-    sales_count = one("SELECT COUNT(DISTINCT DATE(v.fecha)) AS total FROM ventas v WHERE (%s IS NULL OR v.fecha::date >= %s::date) AND (%s IS NULL OR v.fecha::date <= %s::date)", params)["total"]
-    purchases_count = one("SELECT COUNT(*) AS total FROM compras c WHERE (%s IS NULL OR c.fecha::date >= %s::date) AND (%s IS NULL OR c.fecha::date <= %s::date)", params)["total"]
-    expenses_count = one("SELECT COUNT(*) AS total FROM gastos g WHERE (%s IS NULL OR g.fecha::date >= %s::date) AND (%s IS NULL OR g.fecha::date <= %s::date)", params)["total"]
-    products_count = one("SELECT COUNT(*) AS total FROM productos WHERE activo=true")["total"]
-    sales = rows("SELECT DATE(v.fecha) AS day,COALESCE(SUM(d.cantidad*d.precio_unitario),0) AS total,COUNT(DISTINCT v.id) AS count FROM ventas v LEFT JOIN detalle_ventas d ON d.id_venta=v.id WHERE (%s IS NULL OR v.fecha::date >= %s::date) AND (%s IS NULL OR v.fecha::date <= %s::date) GROUP BY DATE(v.fecha) ORDER BY day DESC LIMIT %s OFFSET %s", [*params, page_size, offset])
-    expenses = one("SELECT COALESCE(SUM(monto),0) AS total FROM gastos WHERE (%s IS NULL OR fecha::date >= %s::date) AND (%s IS NULL OR fecha::date <= %s::date)", params)
-    purchases = one("SELECT COALESCE(SUM(dc.cantidad*dc.precio_unitario),0) AS total FROM compras c JOIN estados_compra ec ON ec.id=c.id_estado JOIN detalle_compras dc ON dc.id_compra=c.id WHERE ec.nombre='Entregado' AND (%s IS NULL OR c.fecha::date >= %s::date) AND (%s IS NULL OR c.fecha::date <= %s::date)", params)
-    cost_summary = one("""SELECT COALESCE(SUM(dvl.cantidad * dc.precio_unitario), 0) AS total
-        FROM ventas v JOIN detalle_ventas dv ON dv.id_venta = v.id
-        JOIN detalle_venta_lotes dvl ON dvl.id_detalle_venta = dv.id
-        JOIN lotes l ON l.id = dvl.id_lote
-        JOIN detalle_compras dc ON dc.id = l.id_detalle_compra
-        WHERE (%s IS NULL OR v.fecha::date >= %s::date) AND (%s IS NULL OR v.fecha::date <= %s::date)""", params)
-    missing_costs = one("""SELECT COUNT(DISTINCT v.id) AS count
-        FROM ventas v JOIN detalle_ventas dv ON dv.id_venta = v.id
-        WHERE (%s IS NULL OR v.fecha::date >= %s::date) AND (%s IS NULL OR v.fecha::date <= %s::date)
-          AND (SELECT COALESCE(SUM(dvl.cantidad), 0) FROM detalle_venta_lotes dvl
-               WHERE dvl.id_detalle_venta = dv.id) < dv.cantidad""", params)
-    purchase_rows = rows("SELECT c.id,c.fecha,p.nombre AS provider,ec.nombre AS state,COALESCE(SUM(dc.cantidad*dc.precio_unitario),0) AS total FROM compras c JOIN proveedores p ON p.id=c.id_proveedor JOIN estados_compra ec ON ec.id=c.id_estado LEFT JOIN detalle_compras dc ON dc.id_compra=c.id WHERE (%s IS NULL OR c.fecha::date >= %s::date) AND (%s IS NULL OR c.fecha::date <= %s::date) GROUP BY c.id,p.nombre,ec.nombre ORDER BY c.fecha DESC,c.id DESC LIMIT %s OFFSET %s", [*params, page_size, offset])
-    expense_rows = rows("SELECT g.id,g.fecha,g.descripcion AS description,g.monto AS amount,c.nombre AS category FROM gastos g JOIN categorias_gasto c ON c.id=g.id_categoria WHERE (%s IS NULL OR g.fecha::date >= %s::date) AND (%s IS NULL OR g.fecha::date <= %s::date) ORDER BY g.fecha DESC,g.id DESC LIMIT %s OFFSET %s", [*params, page_size, offset])
-    sales_total = one("SELECT COALESCE(SUM(d.cantidad*d.precio_unitario),0) AS total FROM ventas v LEFT JOIN detalle_ventas d ON d.id_venta=v.id WHERE (%s IS NULL OR v.fecha::date >= %s::date) AND (%s IS NULL OR v.fecha::date <= %s::date)", params)["total"]
-    return {
-        "sales": sales, "sales_total": sales_total,
-        "cost_of_goods_sold": cost_summary["total"],
-        "expenses_total": expenses["total"], "sales_without_complete_cost": missing_costs["count"],
-        "purchases_total": purchases["total"], "products": list_product_page(page)["results"],
-        "purchases": purchase_rows, "expenses": expense_rows, "page": page,
-        "page_size": page_size,
-        "counts": {"sales": sales_count, "products": products_count,
-                   "purchases": purchases_count, "expenses": expenses_count},
-    }
 
 
 def dashboard_summary(user_id=None, include_financials=True):

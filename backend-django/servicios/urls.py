@@ -5,7 +5,7 @@ from .modulos.compras.vistas import PurchaseActionView, PurchasesView
 from .modulos.gastos.vistas import ExpensesView
 from .modulos.inventario.vistas import ProductDetailView, ProductListView
 from .modulos.referencias.vistas import ProvidersView, ReferenceDataView
-from .modulos.reportes.vistas import DashboardView, ReportsView
+from .modulos.resumen.vistas import DashboardView
 from .modulos.ventas.vistas import SalesView
 
 urlpatterns = [
@@ -21,5 +21,4 @@ urlpatterns = [
     path('purchases/', PurchasesView.as_view(), name='purchases'),
     path('purchases/<int:purchase_id>/<str:action>/', PurchaseActionView.as_view(), name='purchase_action'),
     path('expenses/', ExpensesView.as_view(), name='expenses'),
-    path('reports/', ReportsView.as_view(), name='reports'),
 ]

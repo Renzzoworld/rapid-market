@@ -18,10 +18,11 @@ import { Gastos, FormularioGasto } from "./modulos/gastos/Gastos.jsx";
 function App() {
   const [seccion, setSeccion] = useState("resumen");
   const auth = useAutenticacion();
+  const { setAccessToken, setRefreshToken } = auth;
   const onTokensRenovados = useCallback((tokens) => {
-    auth.setAccessToken(tokens.access);
-    if (tokens.refresh) auth.setRefreshToken(tokens.refresh);
-  }, [auth.setAccessToken, auth.setRefreshToken]);
+    setAccessToken(tokens.access);
+    if (tokens.refresh) setRefreshToken(tokens.refresh);
+  }, [setAccessToken, setRefreshToken]);
   const { apiRequest, requestPublic } = useClienteApi({
     accessToken: auth.accessToken,
     refreshToken: auth.refreshToken,
