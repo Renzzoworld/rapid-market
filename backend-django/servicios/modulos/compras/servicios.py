@@ -62,7 +62,7 @@ def procesar_accion_compra(purchase_id, action, payload):
                 raise ValidationError({"expiries": "Indica el vencimiento de todos los productos perecibles."})
             if expiry:
                 try:
-                    expiry_date = date.fromisoformat(expiry)
+                    expiry_date = expiry if isinstance(expiry, date) else date.fromisoformat(expiry)
                 except (ValueError, TypeError):
                     raise ValidationError({"expiries": "Fecha de vencimiento no válida."})
                 if expiry_date < timezone.localdate():

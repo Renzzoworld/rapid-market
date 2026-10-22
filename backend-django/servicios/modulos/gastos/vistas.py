@@ -4,6 +4,7 @@ from rest_framework.views import APIView
 
 from .servicios import listar_gastos, registrar_gasto
 from ...compartido.api_base import AdminWriteMixin
+from ...compartido.serializers import GastoSerializer
 
 
 class ExpensesView(AdminWriteMixin, APIView):
@@ -13,4 +14,6 @@ class ExpensesView(AdminWriteMixin, APIView):
         return Response(listar_gastos(request.query_params))
 
     def post(self, request):
-        return Response(registrar_gasto(request.user, request.data), status=status.HTTP_201_CREATED)
+        serializador = GastoSerializer(data=request.data)
+        serializador.is_valid(raise_exception=True)
+        return Response(registrar_gasto(request.user, serializador.validated_data), status=status.HTTP_201_CREATED)

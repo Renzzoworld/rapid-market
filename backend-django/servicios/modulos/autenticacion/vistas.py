@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .servicios import cerrar_sesion, iniciar_sesion
+from ...compartido.serializers import CierreSesionSerializer, InicioSesionSerializer
 
 
 class LoginView(APIView):
@@ -12,7 +13,9 @@ class LoginView(APIView):
     throttle_scope = "login"
 
     def post(self, request):
-        result = iniciar_sesion(request.data)
+        serializador = InicioSesionSerializer(data=request.data)
+        serializador.is_valid(raise_exception=True)
+        result = iniciar_sesion(serializador.validated_data)
         if result is None:
             return Response({"detail": "Usuario o contraseña incorrectos."}, status=status.HTTP_401_UNAUTHORIZED)
         return Response(result)
@@ -20,5 +23,7 @@ class LoginView(APIView):
 
 class LogoutView(APIView):
     def post(self, request):
-        cerrar_sesion(request.data)
+        serializador = CierreSesionSerializer(data=request.data)
+        serializador.is_valid(raise_exception=True)
+        cerrar_sesion(serializador.validated_data)
         return Response(status=status.HTTP_204_NO_CONTENT)

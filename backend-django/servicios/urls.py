@@ -1,5 +1,6 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
+from .views import APIIndexView
 from .modulos.autenticacion.vistas import LoginView, LogoutView
 from .modulos.compras.vistas import PurchaseActionView, PurchasesView
 from .modulos.gastos.vistas import ExpensesView
@@ -9,6 +10,7 @@ from .modulos.resumen.vistas import DashboardView
 from .modulos.ventas.vistas import SalesView
 
 urlpatterns = [
+    path('', APIIndexView.as_view(), name='api_root'),
     path('login/', LoginView.as_view(), name='login'),
     path('logout/', LogoutView.as_view(), name='logout'),
     path('login/refresh/', TokenRefreshView.as_view(), name='token_refresh'),

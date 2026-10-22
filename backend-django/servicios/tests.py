@@ -4,7 +4,7 @@ from unittest.mock import patch
 from django.contrib.auth.hashers import make_password
 from django.test import SimpleTestCase
 from rest_framework.response import Response
-from rest_framework.test import APIRequestFactory, force_authenticate
+from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
 from servicios.authentication import RapidMarketJWTAuthentication
 from servicios.permissions import IsAdministrator
@@ -14,6 +14,30 @@ from servicios.modulos.inventario.vistas import ProductDetailView, ProductListVi
 from servicios.modulos.resumen.vistas import DashboardView
 from servicios.modulos.ventas.vistas import SalesView
 from servicios.modulos.inventario.repositorio import list_product_page
+
+
+class APIIndexTests(SimpleTestCase):
+    def test_api_root_lists_endpoints_and_documents_authorization(self):
+        response = APIClient().get("/api/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "API Rapid Market")
+        self.assertContains(response, "/api/login/")
+        self.assertContains(response, "/api/products/")
+        self.assertContains(response, "Authorization: Bearer")
+
+    def test_product_endpoint_renders_browsable_json_form(self):
+        client = APIClient()
+        client.force_authenticate(user=SimpleNamespace(id=1, is_authenticated=True, role_name="Administrador"))
+        with patch(
+            "servicios.modulos.inventario.vistas.listar_productos",
+            return_value={"results": [], "count": 0, "page": 1, "page_size": 10},
+        ):
+            response = client.get("/api/products/", HTTP_ACCEPT="text/html")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response["Content-Type"].startswith("text/html"))
+        self.assertContains(response, "<textarea", html=False)
 
 
 class LoginViewTests(SimpleTestCase):

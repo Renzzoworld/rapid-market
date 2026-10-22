@@ -86,6 +86,8 @@ npm --prefix frontend-react run dev
 
 Abre la URL que indique Vite, normalmente `http://localhost:5173`.
 
+Para explorar la API desde el navegador, abre `http://127.0.0.1:8000/api/`. El índice enlaza a sus endpoints y cada ruta ofrece la interfaz navegable de Django REST Framework. Las rutas protegidas requieren el token JWT en la cabecera `Authorization: Bearer <access>`; para enviarlo, usa Postman u otro cliente HTTP que permita configurar cabeceras.
+
 ## Siguientes ejecuciones
 
 No vuelvas a crear el entorno ni a instalar dependencias. Inicia PostgreSQL y ejecuta los dos comandos de servidor en terminales separadas.

@@ -4,6 +4,7 @@ from rest_framework.views import APIView
 
 from .servicios import obtener_referencias, registrar_proveedor
 from ...compartido.api_base import AdminWriteMixin
+from ...compartido.serializers import ProveedorSerializer
 
 
 class ReferenceDataView(APIView):
@@ -15,4 +16,6 @@ class ProvidersView(AdminWriteMixin, APIView):
     admin_methods = {"POST"}
 
     def post(self, request):
-        return Response(registrar_proveedor(request.data), status=status.HTTP_201_CREATED)
+        serializador = ProveedorSerializer(data=request.data)
+        serializador.is_valid(raise_exception=True)
+        return Response(registrar_proveedor(serializador.validated_data), status=status.HTTP_201_CREATED)
