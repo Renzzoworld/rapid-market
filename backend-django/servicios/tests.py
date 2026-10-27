@@ -1,12 +1,16 @@
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
-from django.contrib.auth.hashers import make_password
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+from django.core.management import call_command
+from django.core.cache import cache
+from django.db import connection
+from django.test import TestCase
 from django.test import SimpleTestCase
 from rest_framework.response import Response
 from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
-from servicios.authentication import RapidMarketJWTAuthentication
 from servicios.permissions import IsAdministrator
 from servicios.modulos.autenticacion.vistas import LoginView
 from servicios.modulos.compras.vistas import PurchasesView
@@ -28,7 +32,7 @@ class APIIndexTests(SimpleTestCase):
 
     def test_product_endpoint_renders_browsable_json_form(self):
         client = APIClient()
-        client.force_authenticate(user=SimpleNamespace(id=1, is_authenticated=True, role_name="Administrador"))
+        client.force_authenticate(user=fake_user(1, administrator=True))
         with patch(
             "servicios.modulos.inventario.vistas.listar_productos",
             return_value={"results": [], "count": 0, "page": 1, "page_size": 10},
@@ -40,56 +44,78 @@ class APIIndexTests(SimpleTestCase):
         self.assertContains(response, "<textarea", html=False)
 
 
-class LoginViewTests(SimpleTestCase):
+class DjangoAuthenticationTests(TestCase):
     def setUp(self):
-        self.factory = APIRequestFactory()
+        cache.clear()
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            username="admin", password="correct-password", first_name="Ana", last_name="Test"
+        )
+        self.user.groups.add(Group.objects.get_or_create(name="Administrador")[0])
 
-    def test_login_accepts_hashed_database_password_and_returns_role(self):
-        row = (7, "admin", "Administrador", make_password("correct-password"), True, 1, "Administrador")
-        with patch("servicios.modulos.autenticacion.servicios.usuario_por_nombre", return_value=row):
-            request = self.factory.post("/api/login/", {"username": "admin", "password": "correct-password"}, format="json")
-            response = LoginView.as_view()(request)
+    def login(self, password="correct-password"):
+        return self.client.post("/api/login/", {"username": "admin", "password": password}, format="json")
+
+    def test_login_uses_django_password_and_groups(self):
+        response = self.login()
         self.assertEqual(response.status_code, 200)
-        self.assertIn("access", response.data)
-        self.assertEqual(response.data["user"]["id"], 7)
-        self.assertEqual(response.data["user"]["role"], "Administrador")
+        self.assertEqual(response.data["user"], {"id": self.user.pk, "username": "admin", "name": "Ana Test", "role": "Administrador"})
+        self.client.credentials(HTTP_AUTHORIZATION="Bearer " + response.data["access"])
+        self.assertEqual(self.client.get("/api/purchases/").status_code, 200)
 
-    def test_login_rejects_wrong_password(self):
-        row = (7, "admin", "Administrador", make_password("correct-password"), True, 1, "Administrador")
-        with patch("servicios.modulos.autenticacion.servicios.usuario_por_nombre", return_value=row):
-            request = self.factory.post("/api/login/", {"username": "admin", "password": "wrong"}, format="json")
-            response = LoginView.as_view()(request)
-        self.assertEqual(response.status_code, 401)
+    def test_wrong_password_and_inactive_account_are_rejected(self):
+        self.assertEqual(self.login("wrong").status_code, 401)
+        self.user.is_active = False
+        self.user.save()
+        self.assertEqual(self.login().status_code, 401)
 
-    def test_login_rejects_legacy_plaintext_password(self):
-        row = (7, "admin", "Administrador", "legacy-password", True, 1, "Administrador")
-        with patch("servicios.modulos.autenticacion.servicios.usuario_por_nombre", return_value=row):
-            request = self.factory.post("/api/login/", {"username": "admin", "password": "legacy-password"}, format="json")
-            response = LoginView.as_view()(request)
-        self.assertEqual(response.status_code, 401)
+    def test_plaintext_password_is_rejected(self):
+        self.user.password = "correct-password"
+        self.user.save()
+        self.assertEqual(self.login().status_code, 401)
 
-    def test_login_rejects_inactive_user(self):
-        row = (7, "admin", "Administrador", make_password("correct-password"), False, 1, "Administrador")
-        with patch("servicios.modulos.autenticacion.servicios.usuario_por_nombre", return_value=row):
-            request = self.factory.post("/api/login/", {"username": "admin", "password": "correct-password"}, format="json")
-            response = LoginView.as_view()(request)
-        self.assertEqual(response.status_code, 401)
+    def test_existing_access_token_rejects_deactivated_user(self):
+        token = self.login().data["access"]
+        self.user.is_active = False
+        self.user.save()
+        self.client.credentials(HTTP_AUTHORIZATION="Bearer " + token)
+        self.assertEqual(self.client.get("/api/products/").status_code, 401)
 
-    def test_jwt_resolves_database_user_by_numeric_id(self):
-        with patch("servicios.authentication.lookup_database_user_by_id", return_value=(7, "admin", "Administrador", True, 1, "Administrador")):
-            user = RapidMarketJWTAuthentication().get_user({"user_id": 7})
-        self.assertEqual(user.id, 7)
-        self.assertTrue(user.is_authenticated)
+    def test_refresh_and_logout_use_django_token_tables(self):
+        refresh = self.login().data["refresh"]
+        response = self.client.post("/api/login/refresh/", {"refresh": refresh}, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.client.credentials(HTTP_AUTHORIZATION="Bearer " + response.data["access"])
+        self.assertEqual(self.client.post("/api/logout/", {"refresh": response.data["refresh"]}, format="json").status_code, 204)
+        self.assertEqual(self.client.post("/api/login/refresh/", {"refresh": response.data["refresh"]}, format="json").status_code, 401)
 
-    def test_administrator_permission_rejects_sales_role(self):
-        request = SimpleNamespace(user=SimpleNamespace(role_name="Vendedor"))
-        self.assertFalse(IsAdministrator().has_permission(request, None))
+    def test_group_changes_take_effect_with_existing_token(self):
+        token = self.login().data["access"]
+        self.user.groups.clear()
+        self.user.groups.add(Group.objects.get_or_create(name="Vendedor")[0])
+        self.client.credentials(HTTP_AUTHORIZATION="Bearer " + token)
+        self.assertEqual(self.client.get("/api/purchases/").status_code, 403)
+        self.assertEqual(self.client.get("/api/expenses/").status_code, 403)
+        self.assertEqual(self.client.get("/api/products/").status_code, 200)
+        self.assertEqual(self.client.post("/api/products/", {}, format="json").status_code, 403)
+
+    def test_superuser_can_use_application(self):
+        self.user.groups.clear()
+        self.user.is_superuser = True
+        self.user.save()
+        self.assertEqual(self.login().data["user"]["role"], "Administrador")
+
+
+def fake_user(user_id=19, administrator=False):
+    groups = Mock()
+    groups.filter.return_value.exists.return_value = administrator
+    return SimpleNamespace(id=user_id, is_authenticated=True, is_active=True, is_superuser=False, groups=groups)
 
 
 class RoleAccessTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
-        self.vendor = SimpleNamespace(id=19, is_authenticated=True, role_name="Vendedor")
+        self.vendor = fake_user()
 
     def vendor_request(self, path):
         request = self.factory.get(path)
@@ -126,7 +152,7 @@ class RoleAccessTests(SimpleTestCase):
 class ProductPaginationTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
-        self.user = SimpleNamespace(id=19, is_authenticated=True, role_name="Vendedor")
+        self.user = fake_user()
 
     def test_product_list_returns_requested_page_and_search(self):
         page_data = {"results": [], "count": 23, "page": 2, "page_size": 10}
@@ -180,3 +206,76 @@ class ProductPaginationTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["lots"], lots)
         list_lots.assert_called_once_with(5)
+
+
+class DjangoBusinessIntegrationTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        call_command("seed_initial_data", verbosity=0)
+        self.admin = get_user_model().objects.create_user("integration_admin", password="Integration-pass-458!")
+        self.vendor = get_user_model().objects.create_user("integration_vendor", password="Integration-pass-458!")
+        self.admin.groups.add(Group.objects.get(name="Administrador"))
+        self.vendor.groups.add(Group.objects.get(name="Vendedor"))
+        self.client = APIClient()
+
+    def authenticate(self, user):
+        self.client.credentials()
+        result = self.client.post("/api/login/", {"username": user.username, "password": "Integration-pass-458!"}, format="json")
+        self.assertEqual(result.status_code, 200, result.data)
+        self.client.credentials(HTTP_AUTHORIZATION="Bearer " + result.data["access"])
+
+    def post(self, path, payload, status=201):
+        response = self.client.post(path, payload, format="json")
+        self.assertEqual(response.status_code, status, response.data)
+        return response.data
+
+    def test_purchase_delivery_sale_and_expense_reference_django_accounts(self):
+        self.authenticate(self.admin)
+        refs = self.client.get("/api/references/").data
+        product = self.post("/api/products/", {
+            "name": "Producto de prueba", "unit_id": refs["units"][0]["id"],
+            "price": "10.00", "min_stock": "1", "perishable": False,
+        })
+        purchase = self.post("/api/purchases/", {
+            "provider_id": refs["providers"][0]["id"],
+            "items": [{"product_id": product["id"], "quantity": "10", "unit_price": "4.00"}],
+        })
+        self.post(f"/api/purchases/{purchase['id']}/deliver/", {}, status=200)
+        expense = self.post("/api/expenses/", {
+            "description": "Transporte de prueba", "category_id": refs["expense_categories"][0]["id"], "amount": "5.00",
+        })
+        self.authenticate(self.vendor)
+        sale = self.post("/api/sales/", {
+            "sale_type_id": refs["sale_types"][0]["id"],
+            "payment_method_id": refs["payment_methods"][0]["id"],
+            "items": [{"product_id": product["id"], "quantity": "2"}],
+        })
+        other = get_user_model().objects.create_user("other_vendor", password="Integration-pass-458!")
+        other.groups.add(Group.objects.get(name="Vendedor"))
+        self.authenticate(other)
+        self.assertEqual(self.client.get("/api/sales/").data["count"], 0)
+        self.authenticate(self.vendor)
+        self.assertEqual(self.client.get("/api/sales/").data["count"], 1)
+        self.assertNotIn("cost_of_goods_sold", self.client.get("/api/sales/").data["results"][0])
+        self.assertEqual(self.client.get(f"/api/products/{product['id']}/").data["stock"], 8)
+        with connection.cursor() as cursor:
+            for table, record, account in [("compras", purchase, self.admin), ("gastos", expense, self.admin), ("ventas", sale, self.vendor)]:
+                cursor.execute(f"SELECT id_usuario FROM {table} WHERE id=%s", [record["id"]])
+                self.assertEqual(cursor.fetchone()[0], account.pk)
+                constraints = connection.introspection.get_constraints(cursor, table)
+                targets = [item["foreign_key"] for item in constraints.values() if item["columns"] == ["id_usuario"]]
+                self.assertEqual(targets, [("auth_user", "id")])
+        self.authenticate(self.admin)
+        self.assertEqual(self.client.get("/api/dashboard/").status_code, 200)
+        self.assertEqual(self.client.get("/api/sales/").data["count"], 1)
+
+    def test_schema_contains_only_business_and_django_tables(self):
+        expected = {
+            "categorias_gasto", "compras", "detalle_compras", "detalle_venta_lotes", "detalle_ventas",
+            "estados_compra", "gastos", "lotes", "metodos_pago", "productos", "proveedores",
+            "tipos_venta", "unidades_medida", "ventas",
+        }
+        actual = {table for table in connection.introspection.table_names() if not table.startswith(("auth_", "django_", "token_blacklist_"))}
+        self.assertEqual(actual, expected)
+        call_command("seed_initial_data", verbosity=0)
+        self.assertEqual(Group.objects.filter(name__in=["Administrador", "Vendedor"]).count(), 2)

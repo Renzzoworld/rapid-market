@@ -1,16 +1,15 @@
 from django.core.management.base import BaseCommand
 from django.db import connection
+from django.contrib.auth.models import Group
 
 
 class Command(BaseCommand):
     help = "Crea catálogos iniciales requeridos por Rapid Market (seguro para ejecutar varias veces)."
 
     def handle(self, *args, **options):
+        for name in ("Administrador", "Vendedor"):
+            Group.objects.get_or_create(name=name)
         seed = {
-            "roles": [
-                ("Administrador", "Acceso administrativo"),
-                ("Vendedor", "Acceso a ventas e inventario"),
-            ],
             "unidades_medida": [("Unidad", "unidad"), ("Kilogramo", "kg"), ("Caja", "caja"), ("Paquete", "paquete"), ("Litro", "L")],
             "estados_compra": [("Pendiente de entrega",), ("Entregado",), ("Cancelado",)],
             "metodos_pago": [("Efectivo",), ("Yape",), ("Plin",), ("Tarjeta",)],
@@ -23,7 +22,6 @@ class Command(BaseCommand):
                 for record in rows:
                     placeholders = ",".join(["%s"] * len(record))
                     columns = {
-                        "roles": "nombre,descripcion",
                         "unidades_medida": "nombre,abreviatura",
                         "estados_compra": "nombre",
                         "metodos_pago": "nombre",
@@ -32,4 +30,4 @@ class Command(BaseCommand):
                         "proveedores": "nombre",
                     }[table]
                     cursor.execute(f"INSERT INTO {table} ({columns}) VALUES ({placeholders}) ON CONFLICT DO NOTHING", record)
-        self.stdout.write(self.style.SUCCESS("Catálogos listos: unidades, estados, pagos, tipos de venta, gastos, proveedor y rol."))
+        self.stdout.write(self.style.SUCCESS("Catálogos listos: unidades, estados, pagos, tipos de venta, gastos, proveedor y grupos de Django."))

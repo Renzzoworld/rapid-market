@@ -1,4 +1,5 @@
 from decimal import Decimal
+from ...permissions import is_administrator
 
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
@@ -12,7 +13,7 @@ from ...compartido.validacion import decimal_value, object_payload, pagination_p
 
 def listar_ventas(user, query_params):
     page, search = pagination_params(query_params)
-    administrator = user.role_name.strip().lower() in {"admin", "administrador"}
+    administrator = is_administrator(user)
     return list_sales_page(None if administrator else user.id, administrator, page, search)
 
 
@@ -47,6 +48,6 @@ def registrar_venta(user, payload):
             consume_lot(detail_id, lot_id, amount)
             remaining -= amount
 
-    administrator = user.role_name.strip().lower() in {"admin", "administrador"}
+    administrator = is_administrator(user)
     user_id = None if administrator else user.id
     return get_sale(sale_id, user_id=user_id, include_costs=administrator)

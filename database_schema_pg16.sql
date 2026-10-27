@@ -1,25 +1,5 @@
---
--- PostgreSQL database dump
---
-
-
--- Dumped from database version 18.6
--- Dumped by pg_dump version 18.6
-
-SET statement_timeout = 0;
-SET lock_timeout = 0;
-SET idle_in_transaction_session_timeout = 0;
-SET client_encoding = 'UTF8';
-SET standard_conforming_strings = on;
-SELECT pg_catalog.set_config('search_path', '', false);
-SET check_function_bodies = false;
-SET xmloption = content;
-SET client_min_messages = warning;
-SET row_security = off;
-
-SET default_tablespace = '';
-
-SET default_table_access_method = heap;
+-- Business schema. Created automatically by manage.py migrate.
+-- Manual import requires Django auth migrations first.
 
 --
 -- Name: categorias_gasto; Type: TABLE; Schema: public; Owner: -
@@ -321,32 +301,6 @@ ALTER TABLE public.proveedores ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY 
 
 
 --
--- Name: roles; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.roles (
-    id integer NOT NULL,
-    nombre character varying(50) NOT NULL,
-    descripcion character varying(150),
-    activo boolean DEFAULT true NOT NULL
-);
-
-
---
--- Name: roles_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-ALTER TABLE public.roles ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
-    SEQUENCE NAME public.roles_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-
-
---
 -- Name: tipos_venta; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -390,35 +344,6 @@ CREATE TABLE public.unidades_medida (
 
 ALTER TABLE public.unidades_medida ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
     SEQUENCE NAME public.unidades_medida_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-
-
---
--- Name: usuarios; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.usuarios (
-    id integer NOT NULL,
-    username character varying(50) NOT NULL,
-    password_hash text NOT NULL,
-    nombre_completo character varying(150) NOT NULL,
-    id_rol integer NOT NULL,
-    activo boolean DEFAULT true NOT NULL,
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-
-
---
--- Name: usuarios_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-ALTER TABLE public.usuarios ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
-    SEQUENCE NAME public.usuarios_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -583,22 +508,6 @@ ALTER TABLE ONLY public.proveedores
 
 
 --
--- Name: roles roles_nombre_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.roles
-    ADD CONSTRAINT roles_nombre_key UNIQUE (nombre);
-
-
---
--- Name: roles roles_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.roles
-    ADD CONSTRAINT roles_pkey PRIMARY KEY (id);
-
-
---
 -- Name: tipos_venta tipos_venta_nombre_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -639,22 +548,6 @@ ALTER TABLE ONLY public.unidades_medida
 
 
 --
--- Name: usuarios usuarios_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.usuarios
-    ADD CONSTRAINT usuarios_pkey PRIMARY KEY (id);
-
-
---
--- Name: usuarios usuarios_username_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.usuarios
-    ADD CONSTRAINT usuarios_username_key UNIQUE (username);
-
-
---
 -- Name: ventas ventas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -683,7 +576,7 @@ ALTER TABLE ONLY public.compras
 --
 
 ALTER TABLE ONLY public.compras
-    ADD CONSTRAINT fk_compra_usuario FOREIGN KEY (id_usuario) REFERENCES public.usuarios(id);
+    ADD CONSTRAINT fk_compra_usuario FOREIGN KEY (id_usuario) REFERENCES public.auth_user(id);
 
 
 --
@@ -747,7 +640,7 @@ ALTER TABLE ONLY public.gastos
 --
 
 ALTER TABLE ONLY public.gastos
-    ADD CONSTRAINT fk_gasto_usuario FOREIGN KEY (id_usuario) REFERENCES public.usuarios(id);
+    ADD CONSTRAINT fk_gasto_usuario FOREIGN KEY (id_usuario) REFERENCES public.auth_user(id);
 
 
 --
@@ -764,14 +657,6 @@ ALTER TABLE ONLY public.lotes
 
 ALTER TABLE ONLY public.productos
     ADD CONSTRAINT fk_producto_unidad FOREIGN KEY (id_unidad) REFERENCES public.unidades_medida(id);
-
-
---
--- Name: usuarios fk_usuario_rol; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.usuarios
-    ADD CONSTRAINT fk_usuario_rol FOREIGN KEY (id_rol) REFERENCES public.roles(id);
 
 
 --
@@ -795,7 +680,7 @@ ALTER TABLE ONLY public.ventas
 --
 
 ALTER TABLE ONLY public.ventas
-    ADD CONSTRAINT fk_venta_usuario FOREIGN KEY (id_usuario) REFERENCES public.usuarios(id);
+    ADD CONSTRAINT fk_venta_usuario FOREIGN KEY (id_usuario) REFERENCES public.auth_user(id);
 
 
 --

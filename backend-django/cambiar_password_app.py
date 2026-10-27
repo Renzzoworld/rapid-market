@@ -9,10 +9,9 @@ import django
 
 django.setup()
 
-from django.contrib.auth.hashers import make_password
+from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
-from django.db import connection
 
 
 def main():
@@ -30,14 +29,17 @@ def main():
     except ValidationError as error:
         print(" ".join(error.messages))
         return
-    with connection.cursor() as cursor:
-        cursor.execute(
-            "UPDATE usuarios SET password_hash=%s WHERE username=%s",
-            [make_password(password), username],
-        )
-        if cursor.rowcount != 1:
-            print("No se encontró una cuenta con ese usuario.")
-            return
+    user = get_user_model().objects.filter(username=username).first()
+    if user is None:
+        print("No se encontró una cuenta con ese usuario.")
+        return
+    try:
+        validate_password(password, user=user)
+    except ValidationError as error:
+        print(" ".join(error.messages))
+        return
+    user.set_password(password)
+    user.save(update_fields=["password"])
     print("Contraseña actualizada y guardada como hash.")
 
 

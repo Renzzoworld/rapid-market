@@ -34,39 +34,44 @@ Aplicacion de gestion con frontend React/Vite y backend Django REST Framework.
 	.\.venv\Scripts\python.exe -m pip install -r backend-django\requirements.txt
 	```
 
-6. Solo para una base nueva, inicializa las tablas propias de Rapid Market con el esquema compatible con PostgreSQL 16:
-
-	```powershell
-	psql -U postgres -d rapid_market -f database_schema_pg16.sql
-	```
-
-	Si `psql` no esta en el PATH, ejecuta `database_schema_pg16.sql` desde pgAdmin (Query Tool). El archivo contiene estructura, no filas ni cuentas. Si ya usas una base compartida que contiene estas tablas, no vuelvas a importar el esquema.
-
-7. Crea las tablas de Django:
+6. Crea todas las tablas del negocio y de Django en la base vacía:
 
 	```powershell
 	.\.venv\Scripts\python.exe backend-django\manage.py migrate
 	```
 
-8. Crea los catálogos iniciales que necesita la aplicación:
+	Las migraciones crean las relaciones de compras, ventas y gastos con `auth_user`.
+	No importes el esquema SQL antes o después de este comando. `database_schema_pg16.sql` se conserva como referencia del esquema del negocio.
+	Este historial inicial está preparado para instalaciones nuevas; no debe aplicarse con `--fake` a una instalación anterior.
+
+7. Crea los catálogos iniciales que necesita la aplicación:
 
 	```powershell
 	.\.venv\Scripts\python.exe backend-django\manage.py seed_initial_data
 	```
 
-9. Instala las dependencias del frontend:
+8. Instala las dependencias del frontend:
 
 	```powershell
 	npm --prefix frontend-react ci
 	```
 
-10. Crea la cuenta de aplicación que usarás para entrar:
+9. Crea la cuenta de aplicación que usarás para entrar:
 
 	```powershell
 	.\.venv\Scripts\python.exe backend-django\crear_usuario_app.py
 	```
 
-	Elige el rol Administrador o Vendedor y escribe una contraseña de al menos 12 caracteres. Se solicita dos veces y no se muestra en pantalla. `createsuperuser` crea una cuenta Django distinta y no sirve para el login de Rapid Market. Si ya tienes una cuenta local, cambia su contraseña ejecutando `backend-django\cambiar_password_app.py`.
+	Elige el rol Administrador o Vendedor y escribe una contraseña de al menos 12 caracteres. Se solicita dos veces y no se muestra en pantalla. `createsuperuser` crea una cuenta de Django que también puede iniciar sesión en Rapid Market como Administrador. Las cuentas normales usan los grupos `Administrador` y `Vendedor` de Django (`auth_group` y `auth_user_groups`). Si ya tienes una cuenta local, cambia su contraseña ejecutando `backend-django\cambiar_password_app.py`.
+
+## Verificar la instalación
+
+```powershell
+.\.venv\Scripts\python.exe backend-django\manage.py check
+.\.venv\Scripts\python.exe backend-django\manage.py test servicios --noinput
+```
+
+Las pruebas crean una base temporal independiente y comprueban cuentas de Django, grupos, login, JWT, revocación, permisos y operaciones de compra, venta y gasto.
 
 ## Ejecutar el sistema
 
@@ -105,7 +110,7 @@ Se aplicaron controles básicos inspirados en OWASP API Security Top 10 y ASVS. 
 - `.env` guarda configuracion local y no debe subirse a GitHub.
 - `.env.example` es una plantilla sin credenciales reales y si se sube.
 - `.venv`, `venv`, `node_modules` y `dist` se generan localmente y estan excluidos por `.gitignore`.
-- `database_schema.sql` contiene solo el esquema. No incluyas respaldos con usuarios, hashes de contrasenas o datos reales.
+- `database_schema_pg16.sql` contiene solo el esquema. No incluyas respaldos con usuarios, hashes de contrasenas o datos reales.
 - `frontend-react\package-lock.json` y `backend-django\requirements.txt` se versionan para reproducir las dependencias.
 
 ## Vite template notes

@@ -6,7 +6,7 @@ Esta versión separa el DER en tres vistas para que las tablas y las relaciones 
 
 ```mermaid
 flowchart LR
-    U[USUARIOS] -->|1 a muchos| V[VENTAS]
+    U[AUTH_USER] -->|1 a muchos| V[VENTAS]
     TV[TIPOS_VENTA] -->|1 a muchos| V
     MP[METODOS_PAGO] -->|1 a muchos| V
     V -->|1 a muchos| DV[DETALLE_VENTAS]
@@ -20,7 +20,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    U[USUARIOS] -->|1 a muchos| C[COMPRAS]
+    U[AUTH_USER] -->|1 a muchos| C[COMPRAS]
     PV[PROVEEDORES] -->|1 a muchos| C
     EC[ESTADOS_COMPRA] -->|1 a muchos| C
     C -->|1 a muchos| DC[DETALLE_COMPRAS]
@@ -29,11 +29,12 @@ flowchart LR
     DC -->|1 a muchos| L[LOTES]
 ```
 
-## 3. Usuarios y gastos
+## 3. Cuentas de Django y gastos
 
 ```mermaid
 flowchart LR
-    R[ROLES] -->|1 a muchos| U[USUARIOS]
+    R[AUTH_GROUP] -->|1 a muchos| UG[AUTH_USER_GROUPS]
+    U[AUTH_USER] -->|1 a muchos| UG
     U -->|1 a muchos| G[GASTOS]
     CG[CATEGORIAS_GASTO] -->|1 a muchos| G
 ```

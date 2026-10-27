@@ -55,7 +55,7 @@ class ProveedorSerializer(serializers.Serializer):
 
 
 class InicioSesionSerializer(serializers.Serializer):
-    username = serializers.CharField(max_length=50, trim_whitespace=True)
+    username = serializers.CharField(max_length=150, trim_whitespace=True)
     password = serializers.CharField(max_length=256, trim_whitespace=False, write_only=True)
 
 

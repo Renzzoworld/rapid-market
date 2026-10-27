@@ -5,26 +5,31 @@ Este documento describe dos perspectivas distintas de la base de datos:
 - **DER operativo:** representa las tablas relacionales que usa actualmente la aplicación para registrar compras, inventario, ventas y gastos.
 - **Modelo estrella propuesto:** organiza esos datos para consultas y reportes analíticos. Es una propuesta de almacén de datos; sus tablas no existen todavía en PostgreSQL.
 
-El DER se preparó a partir de `backend-martin/database_schema_pg16.sql`, que el README indica para PostgreSQL 16. Se incluyen las 16 tablas del negocio. Las tablas internas de Django (sesiones, migraciones y permisos) se omiten porque no representan operaciones de Rapid Market.
+El DER incluye las 14 tablas del negocio de `database_schema_pg16.sql` y las tablas de cuentas y grupos de Django relacionadas. Las migraciones crean todo el esquema desde cero. Se omiten las tablas internas de sesiones, migraciones y permisos para facilitar la lectura.
 
 ## 1. DER actual de la aplicación
 
 ```mermaid
 erDiagram
-    ROLES {
+    AUTH_GROUP {
         int id PK
-        string nombre UK
-        string descripcion
-        boolean activo
+        string name UK
     }
-    USUARIOS {
+    AUTH_USER_GROUPS {
+        bigint id PK
+        int user_id FK
+        int group_id FK
+    }
+    AUTH_USER {
         int id PK
         string username UK
-        string password_hash
-        string nombre_completo
-        int id_rol FK
-        boolean activo
-        datetime created_at
+        string password
+        string first_name
+        string last_name
+        boolean is_active
+        boolean is_staff
+        boolean is_superuser
+        datetime date_joined
     }
     UNIDADES_MEDIDA {
         int id PK
@@ -114,15 +119,16 @@ erDiagram
         int id_usuario FK
     }
 
-    ROLES ||--o{ USUARIOS : asigna
+    AUTH_GROUP ||--o{ AUTH_USER_GROUPS : asigna
+    AUTH_USER ||--o{ AUTH_USER_GROUPS : pertenece
     UNIDADES_MEDIDA ||--o{ PRODUCTOS : mide
     PROVEEDORES ||--o{ COMPRAS : suministra
     ESTADOS_COMPRA ||--o{ COMPRAS : clasifica
-    USUARIOS ||--o{ COMPRAS : registra
+    AUTH_USER ||--o{ COMPRAS : registra
     COMPRAS ||--o{ DETALLE_COMPRAS : contiene
     PRODUCTOS ||--o{ DETALLE_COMPRAS : se_compra
     DETALLE_COMPRAS ||--o{ LOTES : origina
-    USUARIOS ||--o{ VENTAS : registra
+    AUTH_USER ||--o{ VENTAS : registra
     TIPOS_VENTA ||--o{ VENTAS : clasifica
     METODOS_PAGO ||--o{ VENTAS : cobra
     VENTAS ||--o{ DETALLE_VENTAS : contiene
@@ -130,7 +136,7 @@ erDiagram
     DETALLE_VENTAS ||--o{ DETALLE_VENTA_LOTES : se_descuenta_de
     LOTES ||--o{ DETALLE_VENTA_LOTES : aporta_stock
     CATEGORIAS_GASTO ||--o{ GASTOS : clasifica
-    USUARIOS ||--o{ GASTOS : registra
+    AUTH_USER ||--o{ GASTOS : registra
 ```
 
 ### Cómo leer el DER

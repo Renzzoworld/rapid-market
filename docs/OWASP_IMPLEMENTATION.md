@@ -16,7 +16,7 @@ Rapid Market es un proyecto académico local. Esta lista documenta controles con
 - Configurar HTTPS, `DJANGO_ALLOWED_HOSTS`, CORS y variables de producción en el servidor real; activar HSTS solo después de que HTTPS funcione.
 - La limitación de login usa caché local en memoria. En un despliegue con varios procesos debe sustituirse por caché compartida y añadirse monitoreo/alertas.
 - Las listas no tienen paginación todavía; añadirla antes de cargar un volumen grande de operaciones.
-- El proyecto usa un usuario/rol propio en `usuarios`, separado del usuario de Django Admin. Administrar altas, bajas y cambios de rol requiere procedimientos internos protegidos.
+- Las cuentas se administran con Django Auth (`auth_user`); la aplicación y Django Admin comparten identidad. Los perfiles se asignan mediante los grupos `Administrador` y `Vendedor`. Un superusuario también tiene acceso administrativo a la aplicación.
 - Mantener PostgreSQL actualizado, restringir la cuenta de conexión a los permisos mínimos, hacer copias de seguridad protegidas y evitar guardar credenciales reales en capturas, logs o repositorios.
 - Realizar una revisión de seguridad y pruebas de autorización con cada rol antes de cualquier despliegue público.
 
@@ -32,4 +32,4 @@ Rapid Market es un proyecto académico local. Esta lista documenta controles con
 | Ver compras y gastos | Sí | No |
 | Registrar compras o gastos | Sí | No |
 
-El script `crear_usuario_app.py` permite elegir el rol al crear una cuenta. Ejecuta `seed_initial_data` para asegurar que exista el catálogo de roles antes de crear la cuenta.
+El script `crear_usuario_app.py` permite elegir el rol al crear una cuenta. Ejecuta `seed_initial_data` para asegurar que exista el conjunto de grupos de Django antes de crear la cuenta.
