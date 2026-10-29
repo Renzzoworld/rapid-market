@@ -282,6 +282,12 @@ ALTER TABLE public.productos ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
 CREATE TABLE public.proveedores (
     id integer NOT NULL,
     nombre character varying(150) NOT NULL,
+    ruc character varying(11),
+    contacto character varying(150) DEFAULT ''::character varying NOT NULL,
+    telefono character varying(30) DEFAULT ''::character varying NOT NULL,
+    email character varying(254) DEFAULT ''::character varying NOT NULL,
+    direccion character varying(250) DEFAULT ''::character varying NOT NULL,
+    logo character varying(255) DEFAULT ''::character varying NOT NULL,
     activo boolean DEFAULT true NOT NULL
 );
 
@@ -497,6 +503,13 @@ ALTER TABLE ONLY public.productos
 
 ALTER TABLE ONLY public.proveedores
     ADD CONSTRAINT proveedores_nombre_key UNIQUE (nombre);
+
+--
+-- Name: proveedores proveedores_ruc_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.proveedores
+    ADD CONSTRAINT proveedores_ruc_key UNIQUE (ruc);
 
 
 --

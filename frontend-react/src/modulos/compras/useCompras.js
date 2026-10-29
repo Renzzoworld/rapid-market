@@ -10,8 +10,8 @@ export function useCompras({ apiRequest, logueado, seccion, esAdministrador, rev
   const [busquedaCompras, setBusquedaCompras] = useState("");
   const [revision, setRevision] = useState(0);
   const [mostrarCompra, setMostrarCompra] = useState(false);
-  const [mostrarProveedorNuevo, setMostrarProveedorNuevo] = useState(false);
-  const [nombreProveedorNuevo, setNombreProveedorNuevo] = useState("");
+  const [cargandoProveedores, setCargandoProveedores] = useState(false);
+  const [errorProveedores, setErrorProveedores] = useState("");
   const [compraSeleccionada, setCompraSeleccionada] = useState(null);
   const [compraVerificando, setCompraVerificando] = useState(null);
   const [compraCancelando, setCompraCancelando] = useState(null);
@@ -24,6 +24,20 @@ export function useCompras({ apiRequest, logueado, seccion, esAdministrador, rev
     apiRequest, ruta: "/purchases/",
     habilitada: logueado && seccion === "compras" && esAdministrador, busqueda: busquedaCompras, revision, mapear: mapearCompra,
   });
+  const cargarProveedores = async () => {
+    if (!logueado || !esAdministrador) return;
+    setCargandoProveedores(true);
+    setErrorProveedores("");
+    try {
+      const referencias = await apiRequest("/references/");
+        setCatalogos((actuales) => ({ ...actuales, ...referencias }));
+        setProveedores(referencias.providers.map((provider) => provider.name));
+    } catch (error) {
+      setErrorProveedores(error.message);
+    } finally {
+      setCargandoProveedores(false);
+    }
+  };
   const productos = useBusquedaProductos({
     apiRequest, habilitada: logueado && mostrarCompra, busqueda: busquedaProductoCompra,
     revision: revisionProductos, mapear: mapearProducto,
@@ -35,19 +49,6 @@ export function useCompras({ apiRequest, logueado, seccion, esAdministrador, rev
   const cambiarMostrarCompra = (value) => {
     setMostrarCompra(value);
     if (!value) productos.limpiar();
-  };
-  const guardarProveedor = async () => {
-    const name = nombreProveedorNuevo.trim();
-    if (!name) { alert("Escribe el nombre del proveedor."); return; }
-    try {
-      const provider = await apiRequest("/providers/", { method: "POST", body: JSON.stringify({ name }) });
-      setCatalogos((current) => ({ ...current, providers: [...current.providers, provider] }));
-      setProveedores((current) => [...current, provider.name]);
-      setNuevaCompra((current) => ({ ...current, proveedor: provider.name }));
-      setBusquedaProveedorCompra(provider.name);
-      setNombreProveedorNuevo("");
-      setMostrarProveedorNuevo(false);
-    } catch (error) { alert(error.message); }
   };
   const agregarProductoCompra = () => {
     const product = productos.registros.find((item) => item.id === Number(nuevaCompra.productoId));
@@ -117,8 +118,7 @@ export function useCompras({ apiRequest, logueado, seccion, esAdministrador, rev
       cargandoProductosCompra: productos.cargando, carritoCompra, compraCancelando,
       compraSeleccionada, compraVerificando, compras: historial.registros,
       comprasFiltradas: historial.registros, errorCompras: historial.error, esAdministrador,
-      fechasVencimiento, guardarProveedor, mostrarCompra, mostrarProveedorNuevo,
-      nombreProveedorNuevo, nuevaCompra,
+      cargarProveedores, cargandoProveedores, errorProveedores, fechasVencimiento, mostrarCompra, nuevaCompra,
       obtenerCodigoCompra: (purchase) => `CPA-${purchase.idCompra ?? Number(String(purchase.id).replace("CPA-", ""))}`,
       obtenerCodigoLote: (lot) => `LT-${lot.idLote ?? Number(String(lot.id).replace("LT-", ""))}`,
       obtenerEstadoCompra: (purchase) => purchase.estado || "Pendiente de entrega",
@@ -129,8 +129,8 @@ export function useCompras({ apiRequest, logueado, seccion, esAdministrador, rev
       registrarCompra, resumenDashboard, seccion, setBusquedaCompras,
       setBusquedaProductoCompra: actualizarBusquedaProductoCompra, setMostrarCompra: cambiarMostrarCompra,
       setBusquedaProveedorCompra, setCarritoCompra, setCompraCancelando, setCompraSeleccionada,
-      setCompraVerificando, setFechasVencimiento, setMostrarProveedorNuevo,
-      setNombreProveedorNuevo, setNuevaCompra, setPaginaCompras: historial.setPagina,
+      setCompraVerificando, setFechasVencimiento,
+      setNuevaCompra, setPaginaCompras: historial.setPagina,
       setPaginaProductosCompra: productos.setPagina, setProductosCompraOpciones: productos.setRegistros,
       setTotalProductosCompraOpciones: productos.setTotal,
       totalCarritoCompra: carritoCompra.reduce((total, item) => total + item.precioUnitario * item.cantidad, 0),

@@ -9,11 +9,13 @@ import { useInventario } from "./modulos/inventario/useInventario.js";
 import { useVentas } from "./modulos/ventas/useVentas.js";
 import { useCompras } from "./modulos/compras/useCompras.js";
 import { useGastos } from "./modulos/gastos/useGastos.js";
+import { useProveedores } from "./modulos/proveedores/useProveedores.js";
 import { useResumen } from "./modulos/resumen/useResumen.js";
 import { Inventario, FormularioProducto, DetalleProducto } from "./modulos/inventario/Inventario.jsx";
 import { Ventas, ModalesVenta } from "./modulos/ventas/Ventas.jsx";
 import { Compras, DetalleCompra, VerificarCompra, FormularioCompra } from "./modulos/compras/Compras.jsx";
 import { Gastos, FormularioGasto } from "./modulos/gastos/Gastos.jsx";
+import { Proveedores } from "./modulos/proveedores/Proveedores.jsx";
 
 function App() {
   const [seccion, setSeccion] = useState("resumen");
@@ -54,6 +56,7 @@ function App() {
     catalogos: resumen.catalogos, resumenDashboard: resumen.resumenDashboard,
     totalGastos: resumen.totalGastos,
   });
+  const proveedores = useProveedores({ apiRequest, logueado: auth.logueado, seccion, esAdministrador });
 
   const cerrarSesion = () => auth.cerrarSesion(apiRequest, () => {
     setSeccion("resumen");
@@ -62,6 +65,7 @@ function App() {
   });
   const cambiarSeccion = (nuevaSeccion) => {
     ventas.estado.setVentaSeleccionada(null);
+    if (nuevaSeccion === "compras") compras.estado.cargarProveedores();
     setSeccion(nuevaSeccion);
   };
 
@@ -77,6 +81,7 @@ function App() {
     estadoVentas: { ...ventas.estado, seccion },
     estadoCompras: { ...compras.estado, seccion },
     estadoGastos: { ...gastos.estado, seccion },
+    estadoProveedores: { ...proveedores.estado, seccion },
   };
 
   if (!auth.logueado) {
@@ -103,6 +108,7 @@ function App() {
             <button className={seccion === "ventas" ? "menu-item active" : "menu-item"} onClick={() => cambiarSeccion("ventas")}>🛒 Ventas</button>
             {esAdministrador && <button className={seccion === "compras" ? "menu-item active" : "menu-item"} onClick={() => cambiarSeccion("compras")}>🚚 Compras</button>}
             {esAdministrador && <button className={seccion === "gastos" ? "menu-item active" : "menu-item"} onClick={() => cambiarSeccion("gastos")}>💰 Gastos</button>}
+            {esAdministrador && <button className={seccion === "proveedores" ? "menu-item active" : "menu-item"} onClick={() => cambiarSeccion("proveedores")}>🏭 Proveedores</button>}
           </nav>
           <button className="logout-button" onClick={cerrarSesion}>🚪 Cerrar sesión</button>
         </aside>
@@ -112,6 +118,7 @@ function App() {
           <Ventas />
           <Compras />
           <Gastos />
+          <Proveedores />
         </main>
         <FormularioProducto />
         <ModalesVenta />

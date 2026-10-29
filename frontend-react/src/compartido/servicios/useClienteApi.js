@@ -12,10 +12,11 @@ async function leerRespuesta(response) {
 }
 
 function opcionesConToken(options, token) {
+  const esFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   return {
     ...options,
     headers: {
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...(options.body && !esFormData ? { "Content-Type": "application/json" } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },

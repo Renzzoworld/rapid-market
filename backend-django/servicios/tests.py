@@ -260,11 +260,15 @@ class DjangoBusinessIntegrationTests(TestCase):
         self.assertEqual(self.client.get(f"/api/products/{product['id']}/").data["stock"], 8)
         with connection.cursor() as cursor:
             for table, record, account in [("compras", purchase, self.admin), ("gastos", expense, self.admin), ("ventas", sale, self.vendor)]:
-                cursor.execute(f"SELECT id_usuario FROM {table} WHERE id=%s", [record["id"]])
-                self.assertEqual(cursor.fetchone()[0], account.pk)
-                constraints = connection.introspection.get_constraints(cursor, table)
-                targets = [item["foreign_key"] for item in constraints.values() if item["columns"] == ["id_usuario"]]
-                self.assertEqual(targets, [("auth_user", "id")])
+                with self.subTest(table=table):
+                    cursor.execute(f"SELECT id_usuario FROM {table} WHERE id=%s", [record["id"]])
+                    self.assertEqual(cursor.fetchone()[0], account.pk)
+                    constraints = connection.introspection.get_constraints(cursor, table)
+                    targets = [
+                        item["foreign_key"] for item in constraints.values()
+                        if item["columns"] == ["id_usuario"] and item["foreign_key"] is not None
+                    ]
+                    self.assertEqual(targets, [("auth_user", "id")])
         self.authenticate(self.admin)
         self.assertEqual(self.client.get("/api/dashboard/").status_code, 200)
         self.assertEqual(self.client.get("/api/sales/").data["count"], 1)

@@ -52,6 +52,13 @@ class GastoSerializer(serializers.Serializer):
 
 class ProveedorSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=150, trim_whitespace=True)
+    ruc = serializers.RegexField(r"^\d{11}$", required=False, allow_blank=True)
+    contact = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    phone = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    address = serializers.CharField(max_length=250, required=False, allow_blank=True)
+    logo = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    active = serializers.BooleanField(required=False, default=True)
 
 
 class InicioSesionSerializer(serializers.Serializer):

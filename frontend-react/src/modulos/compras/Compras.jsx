@@ -376,7 +376,7 @@ export function VerificarCompra() {
 }
 export function FormularioCompra() {
   const { estadoCompras } = useContextoAplicacion();
-  const { agregarProductoCompra, busquedaProductoCompra, busquedaProveedorCompra, cambiarCantidadProductoCompra, cargandoProductosCompra, carritoCompra, guardarProveedor, mostrarCompra, mostrarProveedorNuevo, nombreProveedorNuevo, nuevaCompra, paginaProductosCompra, productoSeleccionadoCompra, productosCompraFiltrados, proveedoresFiltrados, registrarCompra, setBusquedaProductoCompra, setBusquedaProveedorCompra, setCarritoCompra, setMostrarCompra, setMostrarProveedorNuevo, setNombreProveedorNuevo, setNuevaCompra, setPaginaProductosCompra, setProductosCompraOpciones, setTotalProductosCompraOpciones, totalCarritoCompra, totalProductosCompraOpciones } = estadoCompras;
+  const { agregarProductoCompra, busquedaProductoCompra, busquedaProveedorCompra, cambiarCantidadProductoCompra, cargandoProductosCompra, cargandoProveedores, carritoCompra, errorProveedores, mostrarCompra, nuevaCompra, paginaProductosCompra, productoSeleccionadoCompra, productosCompraFiltrados, proveedoresFiltrados, registrarCompra, setBusquedaProductoCompra, setBusquedaProveedorCompra, setCarritoCompra, setMostrarCompra, setNuevaCompra, setPaginaProductosCompra, setProductosCompraOpciones, setTotalProductosCompraOpciones, totalCarritoCompra, totalProductosCompraOpciones } = estadoCompras;
 
   return (
     <>
@@ -423,35 +423,12 @@ export function FormularioCompra() {
 
                 <label>Proveedor</label>
 
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => setMostrarProveedorNuevo((visible) => !visible)}
-                >
-                  {mostrarProveedorNuevo ? "Cancelar nuevo proveedor" : "+ Agregar proveedor"}
-                </button>
-
-                {mostrarProveedorNuevo && (
-                  <div className="provider-create-row">
-                    <input
-                      type="text"
-                      maxLength="150"
-                      placeholder="Nombre del proveedor"
-                      value={nombreProveedorNuevo}
-                      onChange={(event) => setNombreProveedorNuevo(event.target.value)}
-                    />
-                    <button type="button" className="primary-button" onClick={guardarProveedor}>
-                      Guardar proveedor
-                    </button>
-                  </div>
-                )}
-
                 <div className="product-autocomplete">
                   <input
                     type="text"
-                    placeholder="Escribe para buscar un proveedor"
+                    placeholder={cargandoProveedores ? "Cargando proveedores..." : "Escribe para buscar un proveedor"}
                     value={busquedaProveedorCompra}
-                    disabled={carritoCompra.length > 0}
+                    disabled={carritoCompra.length > 0 || cargandoProveedores || Boolean(errorProveedores)}
                     onChange={(e) => {
                       setBusquedaProveedorCompra(e.target.value);
                       setNuevaCompra({ ...nuevaCompra, proveedor: "" });
@@ -482,6 +459,12 @@ export function FormularioCompra() {
                     </div>
                   )}
                 </div>
+                {errorProveedores && <p className="field-error" role="alert">No se pudieron cargar los proveedores: {errorProveedores}</p>}
+                {!cargandoProveedores && !errorProveedores && proveedoresFiltrados.length === 0 && (
+                  <p className="field-hint">
+                    {busquedaProveedorCompra.trim() ? "No se encontraron proveedores con esa búsqueda." : "No hay proveedores activos. Regístralos desde el módulo Proveedores."}
+                  </p>
+                )}
 
               </div>
 

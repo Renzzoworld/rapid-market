@@ -1,5 +1,5 @@
-export default function Paginacion({ pagina, cantidad, cargando, alCambiar }) {
-  const totalPaginas = Math.ceil(cantidad / 10);
+export default function Paginacion({ pagina, cantidad, cargando, alCambiar, tamanoPagina = 10 }) {
+  const totalPaginas = Math.ceil(cantidad / tamanoPagina);
   if (totalPaginas <= 1) return null;
   const inicio = Math.max(1, Math.min(pagina - 2, totalPaginas - 4));
   const paginas = Array.from({ length: Math.min(5, totalPaginas) }, (_, indice) => inicio + indice);

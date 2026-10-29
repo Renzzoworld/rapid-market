@@ -133,6 +133,12 @@ class Productos(models.Model):
 
 class Proveedores(models.Model):
     nombre = models.CharField(unique=True, max_length=150)
+    ruc = models.CharField(max_length=11, unique=True, blank=True, null=True)
+    contacto = models.CharField(max_length=150, blank=True, default='', db_default='')
+    telefono = models.CharField(max_length=30, blank=True, default='', db_default='')
+    email = models.EmailField(blank=True, default='', db_default='')
+    direccion = models.CharField(max_length=250, blank=True, default='', db_default='')
+    logo = models.CharField(max_length=255, blank=True, default='', db_default='')
     activo = models.BooleanField(default=True,db_default=True)
 
     class Meta:

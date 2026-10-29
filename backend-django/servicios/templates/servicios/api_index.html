@@ -28,7 +28,7 @@
     <ul>
       <li><a href="{% url 'dashboard' %}"><code>GET /api/dashboard/</code></a> — resumen.</li>
       <li><a href="{% url 'references' %}"><code>GET /api/references/</code></a> — catálogos.</li>
-      <li><a href="{% url 'providers' %}"><code>POST /api/providers/</code></a> — registrar proveedor (Administrador).</li>
+      <li><a href="{% url 'providers_manage' %}"><code>GET, POST /api/providers/manage/</code></a> — consultar o registrar proveedores (Administrador).</li>
       <li><a href="{% url 'products' %}"><code>GET, POST /api/products/</code></a> — consultar o crear productos.</li>
       <li><code>GET, PATCH, DELETE /api/products/&lt;product_id&gt;/</code> — consultar, modificar o desactivar un producto.</li>
       <li><a href="{% url 'sales' %}"><code>GET, POST /api/sales/</code></a> — consultar o registrar ventas.</li>

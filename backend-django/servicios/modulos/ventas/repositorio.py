@@ -15,7 +15,7 @@ def payment_method_is_active(payment_id):
 
 def create_sale(user_id, sale_type_id, payment_id):
     with connection.cursor() as cursor:
-        cursor.execute("INSERT INTO ventas (id_usuario,id_tipo_venta,id_metodo_pago) VALUES (%s,%s,%s) RETURNING id", [user_id, sale_type_id, payment_id])
+        cursor.execute("INSERT INTO ventas (fecha,id_usuario,id_tipo_venta,id_metodo_pago) VALUES (CURRENT_TIMESTAMP,%s,%s,%s) RETURNING id", [user_id, sale_type_id, payment_id])
         return cursor.fetchone()[0]
 
 
