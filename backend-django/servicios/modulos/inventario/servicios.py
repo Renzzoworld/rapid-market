@@ -5,6 +5,7 @@ from .repositorio import (
     create_product, deactivate_product, get_product, get_product_record,
     list_product_lots, list_product_page, update_product,
 )
+from ...models import CategoriasProductos
 from ...compartido.validacion import boolean_value, decimal_value, object_payload, required_id
 
 
@@ -19,7 +20,14 @@ def listar_productos(query_params):
             raise ValueError
     except (TypeError, ValueError):
         raise ValidationError({"page": "La página debe ser un entero mayor que cero."})
-    return list_product_page(page, search)
+    raw_categories = query_params.get("category_ids", "").strip()
+    try:
+        category_ids = [int(value) for value in raw_categories.split(",") if value] if raw_categories else []
+        if any(value < 1 for value in category_ids):
+            raise ValueError
+    except ValueError:
+        raise ValidationError({"category_ids": "Las categorías solicitadas no son válidas."})
+    return list_product_page(page, search, category_ids)
 
 
 def crear_producto(payload):
@@ -30,9 +38,12 @@ def crear_producto(payload):
     price = decimal_value(data.get("price"), "price", strict=True)
     minimum = decimal_value(data.get("min_stock", 5), "min_stock")
     unit_id = required_id(data.get("unit_id"), "unit_id")
+    category_id = required_id(data.get("category_id"), "category_id")
+    if not CategoriasProductos.objects.filter(pk=category_id).exists():
+        raise ValidationError({"category_id": "Selecciona una categoría válida."})
     perishable = boolean_value(data.get("perishable"), "perishable")
     try:
-        product_id = create_product(name, unit_id, price, perishable, minimum)
+        product_id = create_product(name, unit_id, category_id, price, perishable, minimum)
     except DatabaseError:
         raise ValidationError({"name": "No se pudo crear el producto. Verifica que el nombre no esté repetido y la unidad exista."})
     return get_product(product_id)
@@ -53,11 +64,14 @@ def actualizar_producto(product_id, payload):
     data = object_payload(payload)
     values = [str(data.get("name", old["nombre"])).strip(),
               required_id(data.get("unit_id", old["id_unidad"]), "unit_id"),
+              required_id(data.get("category_id", old["id_categoria"]), "category_id"),
               decimal_value(data.get("price", old["precio_venta"]), "price", strict=True),
               boolean_value(data.get("perishable"), "perishable", old["perecible"]),
               decimal_value(data.get("min_stock", old["stock_minimo"]), "min_stock"), product_id]
     if not values[0] or len(values[0]) > 120:
         raise ValidationError({"name": "Nombre inválido."})
+    if not CategoriasProductos.objects.filter(pk=values[2]).exists():
+        raise ValidationError({"category_id": "Selecciona una categoría válida."})
     try:
         update_product(values)
     except DatabaseError:

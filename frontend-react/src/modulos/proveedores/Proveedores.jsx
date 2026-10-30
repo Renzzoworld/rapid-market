@@ -1,228 +1,75 @@
 import Paginacion from "../../compartido/componentes/Paginacion.jsx";
 import { useContextoAplicacion } from "../../compartido/contexto/useContextoAplicacion.js";
+import { useState } from "react";
 
-const LOGO_PREDETERMINADO = "/proveedor-sin-logo.svg";
-const medios = {
-  telefono: "Teléfono",
-  whatsapp: "WhatsApp",
-  correo: "Correo",
-  web: "Sitio web",
-  otro: "Otro",
-};
+const logoDefault="/proveedor-sin-logo.svg";
+const labels={telefono:"Teléfono empresarial",whatsapp:"WhatsApp empresarial",correo:"Correo empresarial",web:"Página web",red_social:"Redes sociales"};
+function Modal({title,onClose,children}){return <div className="modal-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}><section className="modal-card proveedor-dialogo" role="dialog" aria-modal="true"><div className="modal-header"><h2>{title}</h2><button type="button" className="modal-close" onClick={onClose}>×</button></div>{children}</section></div>;}
 
-function Dialogo({ titulo, cerrar, children }) {
-  return (
-    <div className="modal-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) cerrar(); }}>
-      <section className="modal-card proveedor-dialogo" role="dialog" aria-modal="true" aria-label={titulo}>
-        <div className="modal-header">
-          <div><h2>{titulo}</h2></div>
-          <button type="button" className="modal-close" onClick={cerrar} aria-label="Cerrar">×</button>
-        </div>
-        {children}
-      </section>
-    </div>
-  );
+const horaCorta=(hora)=>String(hora||"").slice(0,5);
+function diasComoRangos(indices,dias){
+ const groups=[]; let current=[];
+ for(const day of indices){if(!current.length||day===current[current.length-1]+1)current.push(day);else{groups.push(current);current=[day];}}
+ if(current.length)groups.push(current);
+ return groups.map(g=>g.length>1?`${dias[g[0]]} a ${dias[g[g.length-1]]}`:dias[g[0]]).join(", ");
+}
+function gruposHorario(horarios){
+ const groups=new Map();
+ horarios.forEach(h=>{const key=`${horaCorta(h.hora_inicio)}-${horaCorta(h.hora_fin)}`;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(Number(h.dia_semana));});
+ return [...groups.entries()].map(([key,days])=>({key,days:[...new Set(days)].sort((a,b)=>a-b)})).sort((a,b)=>a.days[0]-b.days[0]);
+}
+function DetalleHorario({horarios,diasSemana}){if(!horarios?.length)return <p>Sin horario registrado.</p>;return <div className="schedule-display">{gruposHorario(horarios).map(({key,days})=>{const [start,end]=key.split("-");return <p key={key}><strong>{diasComoRangos(days,diasSemana)}:</strong> {start}–{end}</p>;})}</div>;}
+
+function EditorHorario({horarios,onChange,diasSemana,titulo}){
+ const [diasSeleccionados,setDiasSeleccionados]=useState([]);const [inicio,setInicio]=useState("09:00");const [fin,setFin]=useState("17:00");const [error,setError]=useState("");
+ const agregar=()=>{if(!diasSeleccionados.length){setError("Selecciona uno o más días.");return;}if(fin<=inicio){setError("La hora final debe ser posterior a la inicial.");return;}if(diasSeleccionados.some(day=>horarios.some(h=>Number(h.dia_semana)===day&&inicio<horaCorta(h.hora_fin)&&horaCorta(h.hora_inicio)<fin))){setError("Uno o más días ya tienen un horario que se cruza con este intervalo.");return;}setError("");onChange([...horarios,...diasSeleccionados.map(dia_semana=>({dia_semana,hora_inicio:inicio,hora_fin:fin}))]);};
+ const quitar=(dia,inicioHorario,finHorario)=>onChange(horarios.filter(h=>!(Number(h.dia_semana)===dia&&horaCorta(h.hora_inicio)===inicioHorario&&horaCorta(h.hora_fin)===finHorario)));
+ return <fieldset className="schedule-fieldset schedule-editor"><legend>{titulo}</legend>
+  <p className="schedule-step-title">1. Selecciona los días a los que aplicarás el horario</p><div className="schedule-days">{diasSemana.map((dia,index)=><label className={diasSeleccionados.includes(index)?"selected":""} key={dia}><input type="checkbox" checked={diasSeleccionados.includes(index)} onChange={e=>setDiasSeleccionados(e.target.checked?[...diasSeleccionados,index]:diasSeleccionados.filter(x=>x!==index))}/>{dia}</label>)}</div>
+  <p className="schedule-step-title">2. Define el intervalo y agrégalo a los días seleccionados</p><div className="schedule-add-row"><label>Desde<input type="time" value={inicio} onChange={e=>setInicio(e.target.value)}/></label><label>Hasta<input type="time" value={fin} onChange={e=>setFin(e.target.value)}/></label><button type="button" className="details-button" onClick={agregar}>+ Agregar horario</button></div>
+  {error&&<p className="field-error" role="alert">{error}</p>}
+  <div className="schedule-assigned"><strong>Horarios agregados</strong>{horarios.length?gruposHorario(horarios).map(({key,days})=>{const [start,end]=key.split("-");return <div className="schedule-assigned-group" key={key}><span>{diasComoRangos(days,diasSemana)} · {start}–{end}</span>{days.map(day=><button type="button" key={`${day}-${key}`} aria-label={`Quitar horario de ${diasSemana[day]} ${start}-${end}`} onClick={()=>quitar(day,start,end)}>Quitar {diasSemana[day]}</button>)}</div>;}):<span className="field-hint">Aún no se han agregado horarios.</span>}</div>
+ </fieldset>;
 }
 
-export function Proveedores() {
-  const { estadoProveedores: p } = useContextoAplicacion();
-  const {
-    busqueda, cargando, error, esAdministrador, pagina, registros, seleccionado,
-    total, setBusqueda, setPagina, mostrarFormulario, setMostrarFormulario,
-    proveedorEditando, nuevoProveedor, setNuevoProveedor, contactoDetalle,
-    canalDetalle, formRelacion, contactoEditando, canalEditando, formContacto,
-    formCanal, confirmacion, cargandoDetalle, diasSemana, setContactoDetalle,
-    setCanalDetalle, setFormRelacion, setFormContacto, setFormCanal,
-    abrirProveedor, abrirNuevoProveedor, editarProveedor, guardarProveedor,
-    cambiarEstadoProveedor, abrirFormularioContacto, guardarContacto,
-    abrirFormularioCanal, guardarCanal, solicitarEliminacion,
-    confirmarEliminacion,
-  } = p;
-
-  if (!esAdministrador) return null;
-
-  const cambiarHorario = (dia, cambios) => {
-    const actual = formContacto.horarios.find((horario) => horario.dia_semana === dia);
-    const horarios = actual
-      ? formContacto.horarios.map((horario) => horario.dia_semana === dia ? { ...horario, ...cambios } : horario)
-      : [...formContacto.horarios, { dia_semana: dia, hora_inicio: "09:00", hora_fin: "17:00", ...cambios }];
-    setFormContacto({ ...formContacto, horarios });
-  };
-
-  const alternarDia = (dia, marcado) => {
-    const horarios = marcado
-      ? [...formContacto.horarios, { dia_semana: dia, hora_inicio: "09:00", hora_fin: "17:00" }]
-      : formContacto.horarios.filter((horario) => horario.dia_semana !== dia);
-    setFormContacto({ ...formContacto, horarios });
-  };
-
-  return (
-    <>
-      {p.seccion === "proveedores" && (
-        <section className="proveedores-page">
-          <header className="page-header">
-            <div><h1>Proveedores</h1><p>Administra proveedores, contactos y canales de atención</p></div>
-            <button className="primary-button" onClick={abrirNuevoProveedor}>+ Nuevo proveedor</button>
-          </header>
-
-          <div className="history-toolbar">
-            <input type="search" value={busqueda} placeholder="Buscar por nombre, RUC o dirección..."
-              onChange={(event) => { setBusqueda(event.target.value); setPagina(1); }} />
-          </div>
-
-          {cargando && <div className="empty-state" role="status"><p>Cargando proveedores...</p></div>}
-          {error && <div className="empty-state" role="alert"><p>{error}</p></div>}
-          {!cargando && !error && registros.length === 0 && (
-            <div className="empty-state"><p>{busqueda ? "No hay coincidencias." : "Aún no hay proveedores registrados."}</p></div>
-          )}
-          {!error && registros.length > 0 && (
-            <div className="proveedores-grid">
-              {registros.map((proveedor) => (
-                <button type="button" className="proveedor-card content-card" key={proveedor.id} onClick={() => abrirProveedor(proveedor)}>
-                  <img src={proveedor.logo || LOGO_PREDETERMINADO} alt={`Logo de ${proveedor.nombre}`} />
-                  <strong>{proveedor.nombre}</strong>
-                  <span className={proveedor.activo ? "provider-badge active" : "provider-badge inactive"}>{proveedor.activo ? "Activo" : "Inactivo"}</span>
-                </button>
-              ))}
-            </div>
-          )}
-          <Paginacion pagina={pagina} cantidad={total} cargando={cargando} alCambiar={setPagina} tamanoPagina={9} />
-        </section>
-      )}
-
-      {p.seccion === "proveedores" && seleccionado && (
-        <Dialogo titulo={seleccionado.nombre} cerrar={() => p.setSeleccionado(null)}>
-          {cargandoDetalle ? <p role="status">Cargando detalles...</p> : (
-            <>
-              <div className="proveedor-resumen">
-                <img src={seleccionado.logo || LOGO_PREDETERMINADO} alt={`Logo de ${seleccionado.nombre}`} />
-                <div>
-                  <span className={seleccionado.activo ? "provider-badge active" : "provider-badge inactive"}>{seleccionado.activo ? "Activo" : "Inactivo"}</span>
-                  <p><strong>RUC:</strong> {seleccionado.ruc || "No registrado"}</p>
-                  <p><strong>Dirección:</strong> {seleccionado.direccion || "No registrada"}</p>
-                </div>
-              </div>
-
-              <div className="provider-actions">
-                <button type="button" className="secondary-button" onClick={editarProveedor}>Editar datos generales</button>
-                <button type="button" className="secondary-button" onClick={cambiarEstadoProveedor}>{seleccionado.activo ? "Desactivar" : "Activar"}</button>
-                <button type="button" className="danger-button" onClick={() => solicitarEliminacion("proveedor", seleccionado)}>Eliminar proveedor</button>
-              </div>
-
-              <section className="provider-related-section">
-                <header><h3>Contactos ({seleccionado.contactos?.length || 0})</h3><button type="button" className="details-button" onClick={() => abrirFormularioContacto()}>+ Agregar contacto</button></header>
-                {!seleccionado.contactos?.length && <p className="field-hint">No hay contactos registrados.</p>}
-                {seleccionado.contactos?.map((contacto) => (
-                  <article className="provider-related-card" key={contacto.id}>
-                    <div><strong>{contacto.nombre}</strong><span>{contacto.cargo || "Sin cargo"}</span></div>
-                    <div className="provider-inline-actions">
-                      <button type="button" className="details-button" onClick={() => setContactoDetalle(contacto)}>Detalles</button>
-                      <button type="button" className="secondary-button" onClick={() => abrirFormularioContacto(contacto)}>Editar</button>
-                      <button type="button" className="action-button delete" onClick={() => solicitarEliminacion("contacto", contacto)}>Eliminar</button>
-                    </div>
-                  </article>
-                ))}
-                {contactoDetalle && (
-                  <div className="related-detail">
-                    <header><h4>{contactoDetalle.nombre}</h4><button type="button" className="modal-close" onClick={() => setContactoDetalle(null)} aria-label="Cerrar detalle">×</button></header>
-                    <p><strong>Cargo:</strong> {contactoDetalle.cargo || "No registrado"}</p>
-                    <p><strong>Correo:</strong> {contactoDetalle.email || "No registrado"}</p>
-                    <p><strong>Teléfono:</strong> {contactoDetalle.telefono || "No registrado"}</p>
-                    <p><strong>Estado:</strong> {contactoDetalle.activo ? "Activo" : "Inactivo"}</p>
-                    <h5>Horario de atención</h5>
-                    {contactoDetalle.horarios?.length ? contactoDetalle.horarios.map((h) => (
-                      <p key={h.id || `${h.dia_semana}-${h.hora_inicio}`}>
-                        {diasSemana[h.dia_semana]}: {String(h.hora_inicio).slice(0, 5)}–{String(h.hora_fin).slice(0, 5)}
-                      </p>
-                    )) : <p>Sin horario registrado.</p>}
-                  </div>
-                )}
-              </section>
-
-              <section className="provider-related-section">
-                <header><h3>Canales de atención ({seleccionado.canales?.length || 0})</h3><button type="button" className="details-button" onClick={() => abrirFormularioCanal()}>+ Agregar canal</button></header>
-                {!seleccionado.canales?.length && <p className="field-hint">No hay canales registrados.</p>}
-                {seleccionado.canales?.map((canal) => (
-                  <article className="provider-related-card" key={canal.id}>
-                    <div><strong>{canal.nombre}</strong><span>{medios[canal.medio] || canal.medio}: {canal.valor}</span></div>
-                    <div className="provider-inline-actions">
-                      <button type="button" className="details-button" onClick={() => setCanalDetalle(canal)}>Detalles</button>
-                      <button type="button" className="secondary-button" onClick={() => abrirFormularioCanal(canal)}>Editar</button>
-                      <button type="button" className="action-button delete" onClick={() => solicitarEliminacion("canal", canal)}>Eliminar</button>
-                    </div>
-                  </article>
-                ))}
-                {canalDetalle && (
-                  <div className="related-detail">
-                    <header><h4>{canalDetalle.nombre}</h4><button type="button" className="modal-close" onClick={() => setCanalDetalle(null)} aria-label="Cerrar detalle">×</button></header>
-                    <p><strong>Medio:</strong> {medios[canalDetalle.medio] || canalDetalle.medio}</p>
-                    <p><strong>Dato de contacto:</strong> {canalDetalle.valor}</p>
-                    <p><strong>Función:</strong> {canalDetalle.funcion || "No especificada"}</p>
-                    <p><strong>Contacto asignado:</strong> {seleccionado.contactos?.find((c) => c.id === canalDetalle.contacto)?.nombre || "General del proveedor"}</p>
-                    <p><strong>Estado:</strong> {canalDetalle.activo ? "Activo" : "Inactivo"}</p>
-                  </div>
-                )}
-              </section>
-            </>
-          )}
-        </Dialogo>
-      )}
-
-      {p.seccion === "proveedores" && mostrarFormulario && (
-        <Dialogo titulo={proveedorEditando ? "Editar proveedor" : "Nuevo proveedor"} cerrar={() => setMostrarFormulario(false)}>
-          <form onSubmit={guardarProveedor}>
-            <div className="form-group"><label htmlFor="proveedor-nombre">Nombre *</label><input id="proveedor-nombre" required maxLength="150" value={nuevoProveedor.nombre} onChange={(e) => setNuevoProveedor({ ...nuevoProveedor, nombre: e.target.value })} /></div>
-            <div className="form-group"><label htmlFor="proveedor-ruc">RUC</label><input id="proveedor-ruc" inputMode="numeric" maxLength="11" pattern="[0-9]{11}" value={nuevoProveedor.ruc} onChange={(e) => setNuevoProveedor({ ...nuevoProveedor, ruc: e.target.value })} /></div>
-            <div className="form-group"><label htmlFor="proveedor-direccion">Dirección</label><input id="proveedor-direccion" maxLength="250" value={nuevoProveedor.direccion} onChange={(e) => setNuevoProveedor({ ...nuevoProveedor, direccion: e.target.value })} /></div>
-            <div className="form-group"><label htmlFor="proveedor-logo">Logo (opcional, JPEG/PNG/WebP; máximo 2 MB)</label><input id="proveedor-logo" type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setNuevoProveedor({ ...nuevoProveedor, logo: e.target.files?.[0] || null })} /></div>
-            <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setMostrarFormulario(false)}>Cancelar</button><button type="submit" className="primary-button">Guardar</button></div>
-          </form>
-        </Dialogo>
-      )}
-
-      {p.seccion === "proveedores" && formRelacion === "contacto" && (
-        <Dialogo titulo={contactoEditando ? "Editar contacto" : "Nuevo contacto"} cerrar={() => setFormRelacion(null)}>
-          <form onSubmit={guardarContacto}>
-            <div className="form-group"><label>Nombre *</label><input required maxLength="150" value={formContacto.nombre} onChange={(e) => setFormContacto({ ...formContacto, nombre: e.target.value })} /></div>
-            <div className="form-group"><label>Cargo</label><input maxLength="120" value={formContacto.cargo} onChange={(e) => setFormContacto({ ...formContacto, cargo: e.target.value })} /></div>
-            <div className="form-group"><label>Correo</label><input type="email" maxLength="254" value={formContacto.email} onChange={(e) => setFormContacto({ ...formContacto, email: e.target.value })} /></div>
-            <div className="form-group"><label>Teléfono directo</label><input maxLength="30" value={formContacto.telefono} onChange={(e) => setFormContacto({ ...formContacto, telefono: e.target.value })} /></div>
-            <fieldset className="schedule-fieldset"><legend>Horario semanal</legend>
-              {diasSemana.map((dia, index) => {
-                const horario = formContacto.horarios.find((h) => h.dia_semana === index);
-                return <div className="schedule-row" key={dia}>
-                  <label><input type="checkbox" checked={Boolean(horario)} onChange={(e) => alternarDia(index, e.target.checked)} />{dia}</label>
-                  {horario && <><input aria-label={`${dia} desde`} type="time" required value={horario.hora_inicio} onChange={(e) => cambiarHorario(index, { hora_inicio: e.target.value })} /><span>a</span><input aria-label={`${dia} hasta`} type="time" required value={horario.hora_fin} onChange={(e) => cambiarHorario(index, { hora_fin: e.target.value })} /></>}
-                </div>;
-              })}
-            </fieldset>
-            <div className="form-group"><label><input type="checkbox" checked={formContacto.activo} onChange={(e) => setFormContacto({ ...formContacto, activo: e.target.checked })} /> Activo</label></div>
-            <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setFormRelacion(null)}>Cancelar</button><button type="submit" className="primary-button">Guardar contacto</button></div>
-          </form>
-        </Dialogo>
-      )}
-
-      {p.seccion === "proveedores" && formRelacion === "canal" && (
-        <Dialogo titulo={canalEditando ? "Editar canal" : "Nuevo canal"} cerrar={() => setFormRelacion(null)}>
-          <form onSubmit={guardarCanal}>
-            <div className="form-group"><label>Nombre del canal *</label><input required maxLength="100" value={formCanal.nombre} onChange={(e) => setFormCanal({ ...formCanal, nombre: e.target.value })} /></div>
-            <div className="form-group"><label>Medio</label><select value={formCanal.medio} onChange={(e) => setFormCanal({ ...formCanal, medio: e.target.value })}>{Object.entries(medios).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
-            <div className="form-group"><label>Número, correo o dirección *</label><input required maxLength="255" value={formCanal.valor} onChange={(e) => setFormCanal({ ...formCanal, valor: e.target.value })} /></div>
-            <div className="form-group"><label>Función</label><input maxLength="150" placeholder="Pedidos, soporte, consultas..." value={formCanal.funcion} onChange={(e) => setFormCanal({ ...formCanal, funcion: e.target.value })} /></div>
-            <div className="form-group"><label>Contacto asociado</label><select value={formCanal.contacto} onChange={(e) => setFormCanal({ ...formCanal, contacto: e.target.value })}><option value="">Canal general del proveedor</option>{seleccionado?.contactos?.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select></div>
-            <div className="form-group"><label><input type="checkbox" checked={formCanal.activo} onChange={(e) => setFormCanal({ ...formCanal, activo: e.target.checked })} /> Activo</label></div>
-            <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setFormRelacion(null)}>Cancelar</button><button type="submit" className="primary-button">Guardar canal</button></div>
-          </form>
-        </Dialogo>
-      )}
-
-      {p.seccion === "proveedores" && confirmacion && (
-        <Dialogo titulo="Confirmar eliminación" cerrar={() => p.setConfirmacion(null)}>
-          <p>¿Seguro que deseas eliminar {confirmacion.tipo === "proveedor" ? "el proveedor" : confirmacion.tipo === "contacto" ? "el contacto" : "el canal"} <strong>{confirmacion.nombre}</strong>?</p>
-          {confirmacion.tipo === "proveedor" && <p>También se eliminarán sus contactos, horarios y canales asociados. Si tiene compras registradas, el sistema impedirá eliminarlo; podrás desactivarlo en su lugar.</p>}
-          <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => p.setConfirmacion(null)}>Cancelar</button><button type="button" className="danger-button" onClick={confirmarEliminacion}>Sí, eliminar</button></div>
-        </Dialogo>
-      )}
-    </>
-  );
+export function Proveedores(){
+ const {estadoProveedores:p}=useContextoAplicacion(); const {busqueda,cargando,error,esAdministrador,pagina,registros,seleccionado,total,setBusqueda,setPagina,mostrarFormulario,setMostrarFormulario,proveedorEditando,nuevoProveedor,setNuevoProveedor,catalogos,mediosSeccion,diasSemana,contactoDetalle,canalDetalle,formRelacion,contactoEditando,canalEditando,formContacto,formCanal,confirmacion,cargandoDetalle,setContactoDetalle,setCanalDetalle,setFormRelacion,setFormContacto,setFormCanal,abrirProveedor,abrirNuevoProveedor,editarProveedor,guardarProveedor,cambiarEstadoProveedor,abrirFormularioContacto,guardarContacto,abrirFormularioCanal,guardarCanal,solicitarEliminacion,confirmarEliminacion}=p;
+ if(!esAdministrador)return null;
+ const addDetail=(tipo)=>setFormContacto({...formContacto,datos_contacto:[...formContacto.datos_contacto,{tipo,valor:""}]});
+ const updateDetail=(i,patch)=>setFormContacto({...formContacto,datos_contacto:formContacto.datos_contacto.map((d,n)=>n===i?{...d,...patch}:d)});
+ return <>
+  {p.seccion==="proveedores"&&<section className="proveedores-page"><header className="page-header"><div><h1>Proveedores</h1><p>Administra proveedores, contactos y canales de atención</p></div><button className="primary-button" onClick={abrirNuevoProveedor}>+ Nuevo proveedor</button></header>
+   <div className="history-toolbar"><input type="search" value={busqueda} placeholder="Buscar proveedor..." onChange={e=>{setBusqueda(e.target.value);setPagina(1);}}/></div>
+   {cargando&&<p role="status">Cargando proveedores...</p>}{error&&<p role="alert">{error}</p>}{!cargando&&!error&&!registros.length&&<p className="empty-state">No hay proveedores registrados.</p>}
+   <div className="proveedores-grid">{registros.map(v=><button className="proveedor-card content-card" key={v.id} onClick={()=>abrirProveedor(v)}><img src={v.logo||logoDefault} alt=""/><strong>{v.nombre}</strong><span>{v.razon_social}</span><span className={`provider-badge ${v.activo?"active":"inactive"}`}>{v.activo?"Activo":"Inactivo"}</span></button>)}</div>
+   <Paginacion pagina={pagina} cantidad={total} cargando={cargando} alCambiar={setPagina} tamanoPagina={9}/>
+  </section>}
+  {p.seccion==="proveedores"&&seleccionado&&<Modal title={seleccionado.nombre} onClose={()=>p.setSeleccionado(null)}>{cargandoDetalle?<p>Cargando...</p>:<>
+   <section className="provider-detail-block"><h3>Datos generales</h3><div className="proveedor-resumen"><img src={seleccionado.logo||logoDefault} alt=""/><div><p><b>Razón social:</b> {seleccionado.razon_social}</p><p><b>RUC:</b> {seleccionado.ruc}</p><p><b>Dirección fiscal:</b> {seleccionado.direccion}</p><p><b>Categorías:</b> {seleccionado.categorias.map(x=>x.nombre).join(", ")}</p><b>Horario general</b><DetalleHorario horarios={seleccionado.horarios} diasSemana={diasSemana}/></div></div></section>
+   <div className="provider-actions provider-actions-centered"><button className="provider-edit-action" onClick={editarProveedor}>Editar datos generales</button><button className="provider-state-action" onClick={cambiarEstadoProveedor}>{seleccionado.activo?"Desactivar":"Activar"}</button><button className="danger-button" onClick={()=>solicitarEliminacion("proveedor",seleccionado)}>Eliminar</button></div>
+   <section className="provider-related-section provider-detail-block"><header><h3>Contactos ({seleccionado.contactos.length})</h3><button className="details-button" onClick={()=>abrirFormularioContacto()}>+ Agregar contacto</button></header>{seleccionado.contactos.map(c=><article className="provider-related-card" key={c.id}><div><b>{c.nombre}</b><span>{c.cargo_nombre==="Otros"?c.cargo_otro:c.cargo_nombre}</span></div><div className="provider-inline-actions"><button className="details-button" onClick={()=>setContactoDetalle(contactoDetalle?.id===c.id?null:c)}>{contactoDetalle?.id===c.id?"Ocultar":"Detalles"}</button><button className="secondary-button" onClick={()=>abrirFormularioContacto(c)}>Editar</button><button className="action-button delete" onClick={()=>solicitarEliminacion("contacto",c)}>Eliminar</button></div>{contactoDetalle?.id===c.id&&<div className="related-detail"><p><b>Dirección:</b> {c.direccion}</p><p><b>Medios de contacto:</b></p>{c.datos_contacto.map(d=><p key={d.id}>{d.tipo}: {d.valor}</p>)}<b>Horario</b><DetalleHorario horarios={c.horarios} diasSemana={diasSemana}/></div>}</article>)}</section>
+   <section className="provider-related-section provider-detail-block"><header><h3>Canales empresariales</h3></header>{mediosSeccion.map(m=><div className="channel-section" key={m}><header><h4>{labels[m]}</h4><button className="details-button" onClick={()=>abrirFormularioCanal(m)}>+ Agregar</button></header>{seleccionado.canales.filter(c=>c.medio===m).map(c=><div className="provider-related-card" key={c.id}><span>{m==="red_social"?(catalogos.redes_sociales.find(x=>x.id===c.red_social)?.nombre==="Otros"?c.red_social_otro:catalogos.redes_sociales.find(x=>x.id===c.red_social)?.nombre):c.valor} {c.departamento&&<small>· {catalogos.departamentos.find(x=>x.id===c.departamento)?.nombre==="Otros"?c.departamento_otro:catalogos.departamentos.find(x=>x.id===c.departamento)?.nombre}</small>}</span><div className="provider-inline-actions"><button className="secondary-button" onClick={()=>abrirFormularioCanal(m,c)}>Editar</button><button className="action-button delete" onClick={()=>solicitarEliminacion("canal",c)}>Eliminar</button></div></div>)}</div>)}</section>
+  </>}</Modal>}
+  {p.seccion==="proveedores"&&mostrarFormulario&&<Modal title={proveedorEditando?"Editar proveedor":"Nuevo proveedor"} onClose={()=>setMostrarFormulario(false)}><form onSubmit={guardarProveedor}>
+   <fieldset className="provider-form-section"><legend>Información del proveedor</legend>{[['razon_social','Razón social'],['nombre','Nombre comercial'],['ruc','RUC'],['direccion','Dirección fiscal']].map(([key,label])=><label className="form-group" key={key}>{label} *<input required maxLength={key==="direccion"?250:key==="ruc"?11:key==="nombre"?150:180} inputMode={key==="ruc"?"numeric":undefined} pattern={key==="ruc"?"[0-9]{11}":undefined} value={nuevoProveedor[key]} onChange={e=>setNuevoProveedor({...nuevoProveedor,[key]:e.target.value})}/></label>)}</fieldset>
+   <fieldset className="provider-form-section"><legend>Categorías de productos *</legend>{catalogos.categorias.map(c=><label className="category-choice" key={c.id}><input type="checkbox" checked={nuevoProveedor.categorias.includes(c.id)} onChange={e=>setNuevoProveedor({...nuevoProveedor,categorias:e.target.checked?[...nuevoProveedor.categorias,c.id]:nuevoProveedor.categorias.filter(id=>id!==c.id)})}/>{c.nombre}</label>)}</fieldset>
+   <EditorHorario horarios={nuevoProveedor.horarios} diasSemana={diasSemana} titulo="Horario de atención general *" onChange={horarios=>setNuevoProveedor({...nuevoProveedor,horarios})}/>
+   <fieldset className="provider-form-section"><legend>Imagen</legend><label className="form-group">Logo (opcional)<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>setNuevoProveedor({...nuevoProveedor,logo:e.target.files?.[0]||null})}/></label></fieldset><div className="modal-actions"><button type="button" className="secondary-button" onClick={()=>setMostrarFormulario(false)}>Cancelar</button><button className="primary-button">Guardar</button></div>
+  </form></Modal>}
+  {p.seccion==="proveedores"&&formRelacion==="contacto"&&<Modal title={contactoEditando?"Editar contacto":"Nuevo contacto"} onClose={()=>setFormRelacion(null)}><form onSubmit={guardarContacto}>
+   <fieldset className="provider-form-section"><legend>Información del contacto</legend><label className="form-group">Nombre de contacto *<input required maxLength="150" value={formContacto.nombre} onChange={e=>setFormContacto({...formContacto,nombre:e.target.value})}/></label>
+   <label className="form-group">Cargo *<select required value={formContacto.cargo} onChange={e=>setFormContacto({...formContacto,cargo:Number(e.target.value),cargo_otro:""})}><option value="">Seleccionar</option>{catalogos.cargos.map(x=><option key={x.id} value={x.id}>{x.nombre}</option>)}</select></label>{catalogos.cargos.find(x=>x.id===Number(formContacto.cargo))?.nombre==="Otros"&&<label className="form-group">Especificar cargo *<input required value={formContacto.cargo_otro} onChange={e=>setFormContacto({...formContacto,cargo_otro:e.target.value})}/></label>}
+   <label className="form-group">Dirección *<input required maxLength="250" value={formContacto.direccion} onChange={e=>setFormContacto({...formContacto,direccion:e.target.value})}/></label></fieldset>
+   <fieldset className="schedule-fieldset"><legend>Teléfonos y correos (al menos uno)</legend>{formContacto.datos_contacto.map((d,i)=><div className="schedule-row" key={i}><select value={d.tipo} onChange={e=>updateDetail(i,{tipo:e.target.value,valor:""})}><option value="telefono">Teléfono</option><option value="correo">Correo</option></select><input type={d.tipo==="correo"?"email":"tel"} value={d.valor} onChange={e=>updateDetail(i,{valor:e.target.value})}/><button type="button" onClick={()=>setFormContacto({...formContacto,datos_contacto:formContacto.datos_contacto.filter((_,n)=>n!==i)})}>Quitar</button></div>)}<button type="button" onClick={()=>addDetail("telefono")}>+ Teléfono</button><button type="button" onClick={()=>addDetail("correo")}>+ Correo</button></fieldset>
+   <EditorHorario horarios={formContacto.horarios} diasSemana={diasSemana} titulo="Horario de atención" onChange={horarios=>setFormContacto({...formContacto,horarios})}/>
+   <label className="form-group"><input type="checkbox" checked={formContacto.activo!==false} onChange={e=>setFormContacto({...formContacto,activo:e.target.checked})}/> Activo</label><div className="modal-actions"><button type="button" className="secondary-button" onClick={()=>setFormRelacion(null)}>Cancelar</button><button className="primary-button">Guardar contacto</button></div>
+  </form></Modal>}
+  {p.seccion==="proveedores"&&formRelacion==="canal"&&<Modal title={`${canalEditando?"Editar":"Agregar"} ${labels[formCanal.medio]}`} onClose={()=>setFormRelacion(null)}><form onSubmit={guardarCanal}>
+   {formCanal.medio==="red_social"&&<><label className="form-group">Red social *<select required value={formCanal.red_social} onChange={e=>setFormCanal({...formCanal,red_social:Number(e.target.value),red_social_otro:""})}><option value="">Seleccionar</option>{catalogos.redes_sociales.map(x=><option key={x.id} value={x.id}>{x.nombre}</option>)}</select></label>{catalogos.redes_sociales.find(x=>x.id===Number(formCanal.red_social))?.nombre==="Otros"&&<label className="form-group">Especificar red *<input required value={formCanal.red_social_otro} onChange={e=>setFormCanal({...formCanal,red_social_otro:e.target.value})}/></label>}</>}
+   <label className="form-group">{formCanal.medio==="web"||formCanal.medio==="red_social"?"URL *":"Dato *"}<input required type={formCanal.medio==="correo"?"email":formCanal.medio==="web"||formCanal.medio==="red_social"?"url":"text"} value={formCanal.valor} onChange={e=>setFormCanal({...formCanal,valor:e.target.value})}/></label>
+   {!["web","red_social"].includes(formCanal.medio)&&<><label className="form-group">Departamento *<select required value={formCanal.departamento} onChange={e=>setFormCanal({...formCanal,departamento:Number(e.target.value),departamento_otro:""})}><option value="">Seleccionar</option>{catalogos.departamentos.map(x=><option key={x.id} value={x.id}>{x.nombre}</option>)}</select></label>{catalogos.departamentos.find(x=>x.id===Number(formCanal.departamento))?.nombre==="Otros"&&<label className="form-group">Especificar departamento *<input required value={formCanal.departamento_otro} onChange={e=>setFormCanal({...formCanal,departamento_otro:e.target.value})}/></label>}</>}
+   <div className="modal-actions"><button type="button" className="secondary-button" onClick={()=>setFormRelacion(null)}>Cancelar</button><button className="primary-button">Guardar</button></div>
+  </form></Modal>}
+  {p.seccion==="proveedores"&&confirmacion&&<Modal title="Confirmar eliminación" onClose={()=>p.setConfirmacion(null)}><p>¿Eliminar {confirmacion.tipo} <b>{confirmacion.nombre}</b>?</p>{confirmacion.tipo==="proveedor"&&<p>También se eliminarán sus contactos, horarios y canales asociados. Si tiene compras, la operación se rechazará para conservar el historial.</p>}<div className="modal-actions"><button className="secondary-button" onClick={()=>p.setConfirmacion(null)}>Cancelar</button><button className="danger-button" onClick={confirmarEliminacion}>Sí, eliminar</button></div></Modal>}
+ </>;
 }

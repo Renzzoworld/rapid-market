@@ -72,6 +72,7 @@ function App() {
   const contextoAplicacion = {
     estadoResumen: {
       costosVentasIncompletos: resumen.costosVentasIncompletos, esAdministrador,
+      catalogos: resumen.catalogos,
       gananciaEstimada: resumen.gananciaEstimada, obtenerCodigoVenta: ventas.estado.obtenerCodigoVenta,
       resumenDashboard: resumen.resumenDashboard, seccion, stockBajo: resumen.stockBajo,
       totalVentas: resumen.totalVentas, ventasDashboard: resumen.ventasDashboard,

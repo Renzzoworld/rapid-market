@@ -31,7 +31,7 @@ export function useCompras({ apiRequest, logueado, seccion, esAdministrador, rev
     try {
       const referencias = await apiRequest("/references/");
         setCatalogos((actuales) => ({ ...actuales, ...referencias }));
-        setProveedores(referencias.providers.map((provider) => provider.name));
+        setProveedores(referencias.providers);
     } catch (error) {
       setErrorProveedores(error.message);
     } finally {
@@ -41,6 +41,9 @@ export function useCompras({ apiRequest, logueado, seccion, esAdministrador, rev
   const productos = useBusquedaProductos({
     apiRequest, habilitada: logueado && mostrarCompra, busqueda: busquedaProductoCompra,
     revision: revisionProductos, mapear: mapearProducto,
+    categoryIds: nuevaCompra.proveedor
+      ? (catalogos.providers?.find((provider) => provider.name === nuevaCompra.proveedor)?.category_ids || [-1])
+      : [],
   });
   const actualizarBusquedaProductoCompra = (value) => {
     setBusquedaProductoCompra(value);
@@ -125,7 +128,7 @@ export function useCompras({ apiRequest, logueado, seccion, esAdministrador, rev
       obtenerLotesCompra, paginaCompras: historial.pagina, paginaProductosCompra: productos.pagina,
       productoSeleccionadoCompra: productOptions.find((item) => item.id === Number(nuevaCompra.productoId)),
       productosCompraFiltrados: productOptions, proveedores,
-      proveedoresFiltrados: proveedores.filter((provider) => provider.toLowerCase().includes(busquedaProveedorCompra.toLowerCase())),
+      proveedoresFiltrados: proveedores.filter((provider) => provider.name.toLowerCase().includes(busquedaProveedorCompra.toLowerCase())),
       registrarCompra, resumenDashboard, seccion, setBusquedaCompras,
       setBusquedaProductoCompra: actualizarBusquedaProductoCompra, setMostrarCompra: cambiarMostrarCompra,
       setBusquedaProveedorCompra, setCarritoCompra, setCompraCancelando, setCompraSeleccionada,

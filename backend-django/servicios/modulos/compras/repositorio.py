@@ -20,7 +20,12 @@ def create_purchase(provider_id, state_id, user_id):
 
 
 def active_product(product_id):
-    return one("SELECT id,perecible FROM productos WHERE id=%s AND activo=true", [product_id])
+    return one("SELECT id,perecible,id_categoria FROM productos WHERE id=%s AND activo=true", [product_id])
+
+
+def provider_category_ids(provider_id):
+    result = one("SELECT COALESCE(array_agg(id_categoria), '{}') AS category_ids FROM proveedores_categorias WHERE id_proveedor=%s", [provider_id])
+    return result["category_ids"] if result else []
 
 
 def create_purchase_detail(purchase_id, product_id, quantity, unit_price):

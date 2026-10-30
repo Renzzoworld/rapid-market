@@ -8,29 +8,29 @@ export function useInventario({ apiRequest, logueado, seccion, catalogos, esAdmi
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [productoEditando, setProductoEditando] = useState(null);
   const [productoInventarioSeleccionado, setProductoInventarioSeleccionado] = useState(null);
-  const [nuevoProducto, setNuevoProducto] = useState({ nombre: "", cantidad: "", unidad: "unidad", precio: "" });
+  const [nuevoProducto, setNuevoProducto] = useState({ nombre: "", cantidad: "", unidad: "unidad", precio: "", categoriaId: "" });
   const consulta = useConsultaPaginada({
     apiRequest, ruta: "/products/",
     habilitada: logueado && seccion === "inventario", busqueda, revision, mapear: mapearProducto,
   });
   const abrirNuevoProducto = () => {
     setProductoEditando(null);
-    setNuevoProducto({ nombre: "", unidad: "unidad", precio: "", perecible: false });
+    setNuevoProducto({ nombre: "", unidad: "unidad", precio: "", perecible: false, categoriaId: "" });
     setMostrarFormulario(true);
   };
   const abrirEditarProducto = (producto) => {
     setProductoEditando(producto);
-    setNuevoProducto({ nombre: producto.nombre, unidad: producto.unidad, precio: producto.precio, perecible: producto.perecible });
+    setNuevoProducto({ nombre: producto.nombre, unidad: producto.unidad, precio: producto.precio, perecible: producto.perecible, categoriaId: String(producto.categoriaId) });
     setMostrarFormulario(true);
   };
   const guardarProducto = async (event) => {
     event.preventDefault();
     const unit = catalogos.units.find((item) => item.abreviatura === nuevoProducto.unidad);
-    if (!nuevoProducto.nombre.trim() || !unit || Number(nuevoProducto.precio) <= 0) {
-      alert("Completa el nombre, unidad y un precio mayor que cero.");
+    if (!nuevoProducto.nombre.trim() || !unit || !nuevoProducto.categoriaId || Number(nuevoProducto.precio) <= 0) {
+      alert("Completa nombre, unidad, categoría y precio.");
       return;
     }
-    const body = { name: nuevoProducto.nombre.trim(), unit_id: unit.id, price: Number(nuevoProducto.precio), perishable: Boolean(nuevoProducto.perecible), min_stock: Number(productoEditando?.stockMinimo ?? 5) };
+    const body = { name: nuevoProducto.nombre.trim(), unit_id: unit.id, category_id: Number(nuevoProducto.categoriaId), price: Number(nuevoProducto.precio), perishable: Boolean(nuevoProducto.perecible), min_stock: Number(productoEditando?.stockMinimo ?? 5) };
     try {
       await apiRequest(productoEditando ? `/products/${productoEditando.id}/` : "/products/", { method: productoEditando ? "PATCH" : "POST", body: JSON.stringify(body) });
       setBusqueda(body.name);

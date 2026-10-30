@@ -252,6 +252,7 @@ CREATE TABLE public.productos (
     id integer NOT NULL,
     nombre character varying(120) NOT NULL,
     id_unidad integer NOT NULL,
+    id_categoria integer NOT NULL,
     precio_venta numeric(12,2) NOT NULL,
     perecible boolean DEFAULT false NOT NULL,
     stock_minimo numeric(12,3) DEFAULT 5 NOT NULL,
@@ -281,8 +282,9 @@ ALTER TABLE public.productos ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
 
 CREATE TABLE public.proveedores (
     id integer NOT NULL,
+    razon_social character varying(180) DEFAULT ''::character varying NOT NULL,
     nombre character varying(150) NOT NULL,
-    ruc character varying(11),
+    ruc character varying(11) NOT NULL,
     direccion character varying(250) DEFAULT ''::character varying NOT NULL,
     logo character varying(255) DEFAULT ''::character varying NOT NULL,
     activo boolean DEFAULT true NOT NULL
@@ -311,9 +313,9 @@ CREATE TABLE public.contactos_proveedor (
     id integer NOT NULL,
     id_proveedor integer NOT NULL,
     nombre character varying(150) NOT NULL,
-    cargo character varying(120) DEFAULT ''::character varying NOT NULL,
-    email character varying(254) DEFAULT ''::character varying NOT NULL,
-    telefono character varying(30) DEFAULT ''::character varying NOT NULL,
+    id_cargo integer NOT NULL,
+    cargo_otro character varying(120) DEFAULT ''::character varying NOT NULL,
+    direccion character varying(250) DEFAULT ''::character varying NOT NULL,
     activo boolean DEFAULT true NOT NULL
 );
 
@@ -335,11 +337,12 @@ ALTER TABLE public.contactos_proveedor ALTER COLUMN id ADD GENERATED ALWAYS AS I
 CREATE TABLE public.canales_proveedor (
     id integer NOT NULL,
     id_proveedor integer NOT NULL,
-    id_contacto integer,
-    nombre character varying(100) NOT NULL,
+    id_departamento integer,
+    departamento_otro character varying(120) DEFAULT ''::character varying NOT NULL,
+    id_red_social integer,
+    red_social_otro character varying(80) DEFAULT ''::character varying NOT NULL,
     medio character varying(20) NOT NULL,
     valor character varying(255) NOT NULL,
-    funcion character varying(150) DEFAULT ''::character varying NOT NULL,
     activo boolean DEFAULT true NOT NULL,
     CONSTRAINT uq_canal_medio_valor_proveedor UNIQUE (id_proveedor, medio, valor)
 );
@@ -378,6 +381,15 @@ ALTER TABLE public.horarios_contacto ALTER COLUMN id ADD GENERATED ALWAYS AS IDE
     SEQUENCE NAME public.horarios_contacto_id_seq
     START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1
 );
+
+-- Reusable categories and provider directories added after the initial tables.
+CREATE TABLE public.categorias_productos (id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY, nombre varchar(80) NOT NULL UNIQUE);
+CREATE TABLE public.proveedores_categorias (id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY, id_proveedor integer NOT NULL REFERENCES public.proveedores(id) ON DELETE CASCADE, id_categoria integer NOT NULL REFERENCES public.categorias_productos(id), CONSTRAINT uq_proveedor_categoria UNIQUE(id_proveedor,id_categoria));
+CREATE TABLE public.horarios_proveedor (id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY, id_proveedor integer NOT NULL REFERENCES public.proveedores(id) ON DELETE CASCADE, dia_semana smallint NOT NULL, hora_inicio time NOT NULL, hora_fin time NOT NULL, CONSTRAINT chk_horario_proveedor_intervalo CHECK(hora_fin>hora_inicio), CONSTRAINT uq_horario_proveedor_inicio UNIQUE(id_proveedor,dia_semana,hora_inicio));
+CREATE TABLE public.cargos_proveedor (id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY, nombre varchar(80) NOT NULL UNIQUE);
+CREATE TABLE public.departamentos_proveedor (id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY, nombre varchar(80) NOT NULL UNIQUE);
+CREATE TABLE public.redes_sociales (id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY, nombre varchar(40) NOT NULL UNIQUE);
+CREATE TABLE public.datos_contacto_proveedor (id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY, id_contacto integer NOT NULL REFERENCES public.contactos_proveedor(id) ON DELETE CASCADE, tipo varchar(10) NOT NULL, valor varchar(254) NOT NULL, CONSTRAINT uq_dato_contacto_tipo_valor UNIQUE(id_contacto,tipo,valor));
 
 
 --
@@ -570,6 +582,11 @@ ALTER TABLE ONLY public.productos
 ALTER TABLE ONLY public.productos
     ADD CONSTRAINT productos_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY public.productos ADD CONSTRAINT fk_producto_categoria FOREIGN KEY (id_categoria) REFERENCES public.categorias_productos(id);
+ALTER TABLE ONLY public.contactos_proveedor ADD CONSTRAINT fk_contacto_cargo FOREIGN KEY (id_cargo) REFERENCES public.cargos_proveedor(id);
+ALTER TABLE ONLY public.canales_proveedor ADD CONSTRAINT fk_canal_departamento FOREIGN KEY (id_departamento) REFERENCES public.departamentos_proveedor(id);
+ALTER TABLE ONLY public.canales_proveedor ADD CONSTRAINT fk_canal_red_social FOREIGN KEY (id_red_social) REFERENCES public.redes_sociales(id);
+
 
 --
 -- Name: proveedores proveedores_nombre_key; Type: CONSTRAINT; Schema: public; Owner: -
@@ -696,14 +713,6 @@ ALTER TABLE ONLY public.contactos_proveedor
 
 ALTER TABLE ONLY public.canales_proveedor
     ADD CONSTRAINT fk_canal_proveedor FOREIGN KEY (id_proveedor) REFERENCES public.proveedores(id) ON DELETE CASCADE;
-
-
---
--- Name: canales_proveedor fk_canal_contacto; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.canales_proveedor
-    ADD CONSTRAINT fk_canal_contacto FOREIGN KEY (id_contacto) REFERENCES public.contactos_proveedor(id) ON DELETE SET NULL;
 
 
 --

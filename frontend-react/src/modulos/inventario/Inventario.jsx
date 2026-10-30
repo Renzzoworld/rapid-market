@@ -76,7 +76,7 @@ export function Inventario() {
                       <tr key={producto.id}>
 
                         <td>
-                          <strong>{producto.nombre}</strong>
+                          <strong>{producto.nombre}</strong><br /><small>{producto.categoria}</small>
                         </td>
 
                         <td>
@@ -213,8 +213,9 @@ export function Inventario() {
 }
 
 export function FormularioProducto() {
-  const { estadoInventario } = useContextoAplicacion();
+  const { estadoInventario, estadoResumen } = useContextoAplicacion();
   const { guardarProducto, mostrarFormulario, nuevoProducto, productoEditando, setMostrarFormulario, setNuevoProducto } = estadoInventario;
+  const { catalogos } = estadoResumen;
 
   return (
     <>
@@ -298,6 +299,14 @@ export function FormularioProducto() {
 
                 </div>
 
+              </div>
+
+              <div className="form-group">
+                <label>Categoría *</label>
+                <select required value={nuevoProducto.categoriaId || ""} onChange={(e) => setNuevoProducto({ ...nuevoProducto, categoriaId: e.target.value })}>
+                  <option value="">Selecciona una categoría</option>
+                  {(catalogos?.product_categories || []).map((categoria) => <option key={categoria.id} value={categoria.id}>{categoria.nombre}</option>)}
+                </select>
               </div>
 
               <div className="form-group">

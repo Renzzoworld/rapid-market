@@ -121,6 +121,7 @@ class Productos(models.Model):
     perecible = models.BooleanField(default=False,db_default=False)
     stock_minimo = models.DecimalField(max_digits=12, decimal_places=3, default=5,db_default=5)
     activo = models.BooleanField(default=True,db_default=True)
+    categoria = models.ForeignKey('CategoriasProductos', models.PROTECT, db_column='id_categoria', related_name='productos')
 
     class Meta:
         managed = True
@@ -132,11 +133,13 @@ class Productos(models.Model):
 
 
 class Proveedores(models.Model):
+    razon_social = models.CharField(max_length=180, default='')
     nombre = models.CharField(unique=True, max_length=150)
-    ruc = models.CharField(max_length=11, unique=True, blank=True, null=True)
-    direccion = models.CharField(max_length=250, blank=True, default='', db_default='')
+    ruc = models.CharField(max_length=11, unique=True)
+    direccion = models.CharField(max_length=250, default='')
     logo = models.CharField(max_length=255, blank=True, default='', db_default='')
     activo = models.BooleanField(default=True, db_default=True)
+    categorias = models.ManyToManyField('CategoriasProductos', through='ProveedoresCategorias', related_name='proveedores')
 
     class Meta:
         managed = True
@@ -151,9 +154,9 @@ class ContactosProveedor(models.Model):
         related_name='contactos',
     )
     nombre = models.CharField(max_length=150)
-    cargo = models.CharField(max_length=120, blank=True, default='')
-    email = models.EmailField(blank=True, default='')
-    telefono = models.CharField(max_length=30, blank=True, default='')
+    cargo = models.ForeignKey('CargosProveedor', models.PROTECT, db_column='id_cargo')
+    cargo_otro = models.CharField(max_length=120, blank=True, default='')
+    direccion = models.CharField(max_length=250, default='')
     activo = models.BooleanField(default=True, db_default=True)
 
     class Meta:
@@ -166,14 +169,14 @@ class CanalesProveedor(models.Model):
     MEDIO_WHATSAPP = 'whatsapp'
     MEDIO_CORREO = 'correo'
     MEDIO_WEB = 'web'
-    MEDIO_OTRO = 'otro'
+    MEDIO_RED_SOCIAL = 'red_social'
 
     MEDIOS = [
         (MEDIO_TELEFONO, 'Teléfono'),
         (MEDIO_WHATSAPP, 'WhatsApp'),
         (MEDIO_CORREO, 'Correo'),
         (MEDIO_WEB, 'Sitio web'),
-        (MEDIO_OTRO, 'Otro'),
+        (MEDIO_RED_SOCIAL, 'Red social'),
     ]
 
     proveedor = models.ForeignKey(
@@ -182,18 +185,12 @@ class CanalesProveedor(models.Model):
         db_column='id_proveedor',
         related_name='canales',
     )
-    contacto = models.ForeignKey(
-        ContactosProveedor,
-        on_delete=models.SET_NULL,
-        db_column='id_contacto',
-        related_name='canales_asignados',
-        blank=True,
-        null=True,
-    )
-    nombre = models.CharField(max_length=100)
+    departamento = models.ForeignKey('DepartamentosProveedor', models.PROTECT, db_column='id_departamento', blank=True, null=True)
+    departamento_otro = models.CharField(max_length=120, blank=True, default='')
+    red_social = models.ForeignKey('RedesSociales', models.PROTECT, db_column='id_red_social', blank=True, null=True)
+    red_social_otro = models.CharField(max_length=80, blank=True, default='')
     medio = models.CharField(max_length=20, choices=MEDIOS)
     valor = models.CharField(max_length=255)
-    funcion = models.CharField(max_length=150, blank=True, default='')
     activo = models.BooleanField(default=True, db_default=True)
 
     class Meta:
@@ -205,6 +202,66 @@ class CanalesProveedor(models.Model):
                 name='uq_canal_medio_valor_proveedor',
             ),
         ]
+
+
+class CategoriasProductos(models.Model):
+    nombre = models.CharField(unique=True, max_length=80)
+    class Meta:
+        managed = True
+        db_table = 'categorias_productos'
+
+
+class ProveedoresCategorias(models.Model):
+    proveedor = models.ForeignKey(Proveedores, on_delete=models.CASCADE, db_column='id_proveedor')
+    categoria = models.ForeignKey(CategoriasProductos, on_delete=models.PROTECT, db_column='id_categoria')
+    class Meta:
+        managed = True
+        db_table = 'proveedores_categorias'
+        constraints = [models.UniqueConstraint(fields=['proveedor', 'categoria'], name='uq_proveedor_categoria')]
+
+
+class HorariosProveedor(models.Model):
+    DIAS = HorariosDias = [(0, 'Lunes'), (1, 'Martes'), (2, 'Miércoles'), (3, 'Jueves'), (4, 'Viernes'), (5, 'Sábado'), (6, 'Domingo')]
+    proveedor = models.ForeignKey(Proveedores, on_delete=models.CASCADE, db_column='id_proveedor', related_name='horarios')
+    dia_semana = models.PositiveSmallIntegerField(choices=DIAS)
+    hora_inicio = models.TimeField()
+    hora_fin = models.TimeField()
+    class Meta:
+        managed = True
+        db_table = 'horarios_proveedor'
+        constraints = [models.CheckConstraint(condition=models.Q(hora_fin__gt=models.F('hora_inicio')), name='chk_horario_proveedor_intervalo'), models.UniqueConstraint(fields=['proveedor', 'dia_semana', 'hora_inicio'], name='uq_horario_proveedor_inicio')]
+
+
+class CargosProveedor(models.Model):
+    nombre = models.CharField(unique=True, max_length=80)
+    class Meta:
+        managed = True
+        db_table = 'cargos_proveedor'
+
+
+class DepartamentosProveedor(models.Model):
+    nombre = models.CharField(unique=True, max_length=80)
+    class Meta:
+        managed = True
+        db_table = 'departamentos_proveedor'
+
+
+class RedesSociales(models.Model):
+    nombre = models.CharField(unique=True, max_length=40)
+    class Meta:
+        managed = True
+        db_table = 'redes_sociales'
+
+
+class DatosContactoProveedor(models.Model):
+    TIPOS = [('telefono', 'Teléfono'), ('correo', 'Correo')]
+    contacto = models.ForeignKey(ContactosProveedor, on_delete=models.CASCADE, db_column='id_contacto', related_name='datos_contacto')
+    tipo = models.CharField(max_length=10, choices=TIPOS)
+    valor = models.CharField(max_length=254)
+    class Meta:
+        managed = True
+        db_table = 'datos_contacto_proveedor'
+        constraints = [models.UniqueConstraint(fields=['contacto', 'tipo', 'valor'], name='uq_dato_contacto_tipo_valor')]
 
 
 class HorariosContacto(models.Model):

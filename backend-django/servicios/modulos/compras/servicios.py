@@ -9,7 +9,7 @@ from .repositorio import (
     active_product, create_lot, create_purchase, create_purchase_detail,
     deliver_lot, list_purchase_page, list_purchases, lock_purchase,
     pending_purchase_state, purchase_lines, purchase_state_id,
-    provider_is_active, set_purchase_state,
+    provider_category_ids, provider_is_active, set_purchase_state,
 )
 from ...compartido.validacion import decimal_value, object_payload, pagination_params, required_id
 
@@ -29,6 +29,9 @@ def registrar_compra(user, payload):
     pending = pending_purchase_state()
     if not pending or not provider_is_active(provider_id):
         raise ValidationError({"detail": "Proveedor o estado no configurado."})
+    categorias_proveedor = provider_category_ids(provider_id)
+    if not categorias_proveedor:
+        raise ValidationError({"detail": "El proveedor no tiene categorías de productos asignadas."})
     purchase_id = create_purchase(provider_id, pending["id"], user.id)
     for line in lines:
         product_id = required_id(line.get("product_id"), "product_id")
@@ -37,6 +40,8 @@ def registrar_compra(user, payload):
         product = active_product(product_id)
         if not product:
             raise ValidationError({"items": "Producto inválido."})
+        if product["id_categoria"] not in categorias_proveedor:
+            raise ValidationError({"items": "El producto no pertenece a las categorías del proveedor seleccionado."})
         detail_id = create_purchase_detail(purchase_id, product_id, quantity, unit_price)
         expiry = line.get("expiry_date") if product["perecible"] else None
         create_lot(detail_id, quantity, expiry)

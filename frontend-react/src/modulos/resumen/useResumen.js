@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { fechaVista, mapearVenta } from "../../compartido/servicios/adaptadoresApi.js";
 
-const catalogosIniciales = { units: [], providers: [], payment_methods: [], sale_types: [], expense_categories: [] };
+const catalogosIniciales = { units: [], providers: [], product_categories: [], payment_methods: [], sale_types: [], expense_categories: [] };
 
 export function useResumen({ apiRequest }) {
   const [resumenDashboard, setResumenDashboard] = useState({});
@@ -14,7 +14,7 @@ export function useResumen({ apiRequest }) {
   const cargarDatos = useCallback(async (token) => {
     const data = await apiRequest("/dashboard/", {}, token);
     setCatalogos(data.references);
-    setProveedores(data.references.providers.map((provider) => provider.name));
+    setProveedores(data.references.providers);
     setResumenDashboard(data.summary);
     setProductosBajoStock(data.low_stock_products);
     setVentasDashboard((data.summary.recent_sales || []).map(mapearVenta));

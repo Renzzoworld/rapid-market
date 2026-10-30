@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-export function useBusquedaProductos({ apiRequest, habilitada, busqueda, mapear, revision = 0 }) {
+export function useBusquedaProductos({ apiRequest, habilitada, busqueda, mapear, revision = 0, categoryIds = [] }) {
   const [registros, setRegistros] = useState([]);
   const [total, setTotal] = useState(0);
   const [pagina, setPagina] = useState(1);
@@ -10,6 +10,7 @@ export function useBusquedaProductos({ apiRequest, habilitada, busqueda, mapear,
     if (!habilitada || !busqueda.trim()) return undefined;
     let vigente = true;
     const query = new URLSearchParams({ page: String(pagina), search: busqueda.trim() });
+    if (categoryIds.length) query.set("category_ids", categoryIds.join(","));
     const timer = setTimeout(() => {
       setCargando(true);
       apiRequest(`/products/?${query.toString()}`)
@@ -23,7 +24,7 @@ export function useBusquedaProductos({ apiRequest, habilitada, busqueda, mapear,
         .finally(() => { if (vigente) setCargando(false); });
     }, 150);
     return () => { vigente = false; clearTimeout(timer); };
-  }, [apiRequest, busqueda, habilitada, mapear, pagina, revision]);
+  }, [apiRequest, busqueda, habilitada, mapear, pagina, revision, categoryIds.join(",")]);
 
   const limpiar = () => {
     setRegistros([]);

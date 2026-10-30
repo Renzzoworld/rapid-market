@@ -29,6 +29,7 @@
       <li><a href="{% url 'dashboard' %}"><code>GET /api/dashboard/</code></a> — resumen.</li>
       <li><a href="{% url 'references' %}"><code>GET /api/references/</code></a> — catálogos.</li>
       <li><a href="{% url 'providers_manage' %}"><code>GET, POST /api/providers/manage/</code></a> — consultar o registrar proveedores (Administrador).</li>
+        <li><code>GET /api/providers/catalogs/</code> — listas compartidas de categorías, cargos, departamentos y redes sociales.</li>
       <li><code>GET, PATCH, DELETE /api/providers/manage/&lt;provider_id&gt;/</code> — consultar, editar, desactivar o eliminar un proveedor (Administrador).</li>
       <li><code>GET, POST /api/providers/manage/&lt;provider_id&gt;/contacts/</code> — consultar o agregar contactos y horarios (Administrador).</li>
       <li><code>PATCH, DELETE /api/providers/manage/&lt;provider_id&gt;/contacts/&lt;contact_id&gt;/</code> — modificar o eliminar un contacto (Administrador).</li>

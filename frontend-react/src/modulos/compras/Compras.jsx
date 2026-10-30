@@ -442,13 +442,15 @@ export function FormularioCompra() {
                           <button
                             type="button"
                             className="product-suggestion"
-                            key={proveedor}
+                            key={proveedor.id}
                             onClick={() => {
-                              setBusquedaProveedorCompra(proveedor);
-                              setNuevaCompra({ ...nuevaCompra, proveedor });
+                              setBusquedaProveedorCompra(proveedor.name);
+                              setNuevaCompra({ ...nuevaCompra, proveedor: proveedor.name, productoId: "" });
+                              setBusquedaProductoCompra("");
+                              setProductosCompraOpciones([]);
                             }}
                           >
-                            <span>{proveedor}</span>
+                            <span>{proveedor.name}</span>
                           </button>
                         ))
                       ) : (
@@ -470,7 +472,7 @@ export function FormularioCompra() {
 
               <div className="form-group">
 
-                <label>Producto</label>
+                <label>Producto {nuevaCompra.proveedor && <small> (categorías del proveedor seleccionado)</small>}</label>
 
                 <div className="product-autocomplete">
                   <input

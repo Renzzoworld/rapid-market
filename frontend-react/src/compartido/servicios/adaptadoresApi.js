@@ -9,6 +9,7 @@ export const fechaVista = (value) => {
 
 export const mapearProducto = (product) => ({
   id: product.id, nombre: product.name, cantidad: Number(product.stock),
+  categoriaId: product.category_id, categoria: product.category,
   unidad: product.unit_abbr, unidadId: product.unit_id,
   precio: Number(product.price), precioVenta: Number(product.price),
   perecible: product.perishable, activo: product.active,

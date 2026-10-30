@@ -3,19 +3,19 @@ from django.db import connection
 from ...compartido.repositorio_base import one, rows
 
 
-def create_product(name, unit_id, price, perishable, minimum):
+def create_product(name, unit_id, category_id, price, perishable, minimum):
     with connection.cursor() as cursor:
-        cursor.execute("INSERT INTO productos (nombre,id_unidad,precio_venta,perecible,stock_minimo,activo) VALUES (%s,%s,%s,%s,%s,true) RETURNING id", [name, unit_id, price, perishable, minimum])
+        cursor.execute("INSERT INTO productos (nombre,id_unidad,id_categoria,precio_venta,perecible,stock_minimo,activo) VALUES (%s,%s,%s,%s,%s,%s,true) RETURNING id", [name, unit_id, category_id, price, perishable, minimum])
         return cursor.fetchone()[0]
 
 
 def get_product_record(product_id):
-    return one("SELECT id,nombre,id_unidad,precio_venta,perecible,stock_minimo,activo FROM productos WHERE id=%s", [product_id])
+    return one("SELECT id,nombre,id_unidad,id_categoria,precio_venta,perecible,stock_minimo,activo FROM productos WHERE id=%s", [product_id])
 
 
 def update_product(values):
     with connection.cursor() as cursor:
-        cursor.execute("UPDATE productos SET nombre=%s,id_unidad=%s,precio_venta=%s,perecible=%s,stock_minimo=%s WHERE id=%s", values)
+        cursor.execute("UPDATE productos SET nombre=%s,id_unidad=%s,id_categoria=%s,precio_venta=%s,perecible=%s,stock_minimo=%s WHERE id=%s", values)
 
 
 def deactivate_product(product_id):
@@ -28,7 +28,7 @@ def get_product(product_id):
     return one("""
         SELECT p.id, p.nombre AS name, p.precio_venta AS price,
                p.perecible AS perishable, p.stock_minimo AS min_stock,
-               p.activo AS active, u.id AS unit_id, u.nombre AS unit,
+               p.activo AS active, p.id_categoria AS category_id, cp.nombre AS category, u.id AS unit_id, u.nombre AS unit,
                u.abreviatura AS unit_abbr,
                COALESCE(SUM(CASE
                    WHEN ec.nombre = 'Entregado'
@@ -38,12 +38,13 @@ def get_product(product_id):
                COUNT(DISTINCT l.id) FILTER (WHERE ec.nombre = 'Entregado') AS lot_count
         FROM productos p
         JOIN unidades_medida u ON u.id = p.id_unidad
+        JOIN categorias_productos cp ON cp.id = p.id_categoria
         LEFT JOIN detalle_compras dc ON dc.id_producto = p.id
         LEFT JOIN compras c ON c.id = dc.id_compra
         LEFT JOIN estados_compra ec ON ec.id = c.id_estado
         LEFT JOIN lotes l ON l.id_detalle_compra = dc.id
         WHERE p.id = %s
-        GROUP BY p.id, u.id
+        GROUP BY p.id, u.id, cp.id
     """, [product_id])
 
 def list_product_lots(product_id):
@@ -63,28 +64,29 @@ def list_product_lots(product_id):
         ORDER BY c.fecha DESC, l.id DESC
     """, [product_id])
 
-def list_product_page(page, search=""):
+def list_product_page(page, search="", category_ids=None):
     search_term = f"%{search}%"
-    total = one(
-        "SELECT COUNT(*) AS total FROM productos WHERE activo=true AND nombre ILIKE %s",
-        [search_term],
-    )["total"]
+    category_ids = category_ids or []
+    category_clause = " AND id_categoria = ANY(%s)" if category_ids else ""
+    count_params = [search_term] + ([category_ids] if category_ids else [])
+    total = one(f"SELECT COUNT(*) AS total FROM productos WHERE activo=true AND nombre ILIKE %s{category_clause}", count_params)["total"]
     page_size = 10
     total_pages = (total + page_size - 1) // page_size
     page = min(page, max(total_pages, 1))
-    products = rows("""
+    products = rows(f"""
         WITH product_page AS (
-            SELECT p.id, p.nombre AS name, p.precio_venta AS price,
+            SELECT p.id, p.nombre AS name, p.precio_venta AS price, p.id_categoria AS category_id, cp.nombre AS category,
                    p.perecible AS perishable, p.stock_minimo AS min_stock,
                    p.activo AS active, u.id AS unit_id, u.nombre AS unit,
                    u.abreviatura AS unit_abbr
             FROM productos p
             JOIN unidades_medida u ON u.id = p.id_unidad
-            WHERE p.activo=true AND p.nombre ILIKE %s
+            JOIN categorias_productos cp ON cp.id = p.id_categoria
+            WHERE p.activo=true AND p.nombre ILIKE %s {category_clause.replace('id_categoria', 'p.id_categoria')}
             ORDER BY p.nombre, p.id
             LIMIT %s OFFSET %s
         )
-        SELECT pp.id, pp.name, pp.price, pp.perishable, pp.min_stock, pp.active,
+        SELECT pp.id, pp.name, pp.price, pp.perishable, pp.min_stock, pp.active, pp.category_id, pp.category,
                pp.unit_id, pp.unit, pp.unit_abbr,
                COALESCE(SUM(CASE
                    WHEN ec.nombre = 'Entregado'
@@ -98,9 +100,9 @@ def list_product_page(page, search=""):
         LEFT JOIN estados_compra ec ON ec.id = c.id_estado
         LEFT JOIN lotes l ON l.id_detalle_compra = dc.id
         GROUP BY pp.id, pp.name, pp.price, pp.perishable, pp.min_stock,
-                 pp.active, pp.unit_id, pp.unit, pp.unit_abbr
+                 pp.active, pp.category_id, pp.category, pp.unit_id, pp.unit, pp.unit_abbr
         ORDER BY pp.name, pp.id
-    """, [search_term, page_size, (page - 1) * page_size])
+    """, [search_term] + ([category_ids] if category_ids else []) + [page_size, (page - 1) * page_size])
     return {
         "results": products,
         "count": total,
