@@ -13,7 +13,7 @@ class CategoriasGasto(models.Model):
 
 class Compras(models.Model):
     fecha = models.DateTimeField(db_default=Now())
-    id_proveedor = models.ForeignKey('Proveedores', models.DO_NOTHING, db_column='id_proveedor')
+    id_proveedor = models.ForeignKey('Proveedores', models.PROTECT, db_column='id_proveedor')
     id_estado = models.ForeignKey('EstadosCompra', models.DO_NOTHING, db_column='id_estado')
     id_usuario = models.ForeignKey(settings.AUTH_USER_MODEL, models.DO_NOTHING, db_column='id_usuario')
 
@@ -134,17 +134,113 @@ class Productos(models.Model):
 class Proveedores(models.Model):
     nombre = models.CharField(unique=True, max_length=150)
     ruc = models.CharField(max_length=11, unique=True, blank=True, null=True)
-    contacto = models.CharField(max_length=150, blank=True, default='', db_default='')
-    telefono = models.CharField(max_length=30, blank=True, default='', db_default='')
-    email = models.EmailField(blank=True, default='', db_default='')
     direccion = models.CharField(max_length=250, blank=True, default='', db_default='')
     logo = models.CharField(max_length=255, blank=True, default='', db_default='')
-    activo = models.BooleanField(default=True,db_default=True)
+    activo = models.BooleanField(default=True, db_default=True)
 
     class Meta:
         managed = True
         db_table = 'proveedores'
 
+
+class ContactosProveedor(models.Model):
+    proveedor = models.ForeignKey(
+        Proveedores,
+        on_delete=models.CASCADE,
+        db_column='id_proveedor',
+        related_name='contactos',
+    )
+    nombre = models.CharField(max_length=150)
+    cargo = models.CharField(max_length=120, blank=True, default='')
+    email = models.EmailField(blank=True, default='')
+    telefono = models.CharField(max_length=30, blank=True, default='')
+    activo = models.BooleanField(default=True, db_default=True)
+
+    class Meta:
+        managed = True
+        db_table = 'contactos_proveedor'
+
+
+class CanalesProveedor(models.Model):
+    MEDIO_TELEFONO = 'telefono'
+    MEDIO_WHATSAPP = 'whatsapp'
+    MEDIO_CORREO = 'correo'
+    MEDIO_WEB = 'web'
+    MEDIO_OTRO = 'otro'
+
+    MEDIOS = [
+        (MEDIO_TELEFONO, 'Teléfono'),
+        (MEDIO_WHATSAPP, 'WhatsApp'),
+        (MEDIO_CORREO, 'Correo'),
+        (MEDIO_WEB, 'Sitio web'),
+        (MEDIO_OTRO, 'Otro'),
+    ]
+
+    proveedor = models.ForeignKey(
+        Proveedores,
+        on_delete=models.CASCADE,
+        db_column='id_proveedor',
+        related_name='canales',
+    )
+    contacto = models.ForeignKey(
+        ContactosProveedor,
+        on_delete=models.SET_NULL,
+        db_column='id_contacto',
+        related_name='canales_asignados',
+        blank=True,
+        null=True,
+    )
+    nombre = models.CharField(max_length=100)
+    medio = models.CharField(max_length=20, choices=MEDIOS)
+    valor = models.CharField(max_length=255)
+    funcion = models.CharField(max_length=150, blank=True, default='')
+    activo = models.BooleanField(default=True, db_default=True)
+
+    class Meta:
+        managed = True
+        db_table = 'canales_proveedor'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['proveedor', 'medio', 'valor'],
+                name='uq_canal_medio_valor_proveedor',
+            ),
+        ]
+
+
+class HorariosContacto(models.Model):
+    DIAS = [
+        (0, 'Lunes'),
+        (1, 'Martes'),
+        (2, 'Miércoles'),
+        (3, 'Jueves'),
+        (4, 'Viernes'),
+        (5, 'Sábado'),
+        (6, 'Domingo'),
+    ]
+
+    contacto = models.ForeignKey(
+        ContactosProveedor,
+        on_delete=models.CASCADE,
+        db_column='id_contacto',
+        related_name='horarios',
+    )
+    dia_semana = models.PositiveSmallIntegerField(choices=DIAS)
+    hora_inicio = models.TimeField()
+    hora_fin = models.TimeField()
+
+    class Meta:
+        managed = True
+        db_table = 'horarios_contacto'
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(hora_fin__gt=models.F('hora_inicio')),
+                name='chk_horario_contacto_intervalo',
+            ),
+            models.UniqueConstraint(
+                fields=['contacto', 'dia_semana', 'hora_inicio'],
+                name='uq_horario_contacto_inicio',
+            ),
+        ]
 
 class TiposVenta(models.Model):
     nombre = models.CharField(unique=True, max_length=50)

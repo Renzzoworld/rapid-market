@@ -283,9 +283,6 @@ CREATE TABLE public.proveedores (
     id integer NOT NULL,
     nombre character varying(150) NOT NULL,
     ruc character varying(11),
-    contacto character varying(150) DEFAULT ''::character varying NOT NULL,
-    telefono character varying(30) DEFAULT ''::character varying NOT NULL,
-    email character varying(254) DEFAULT ''::character varying NOT NULL,
     direccion character varying(250) DEFAULT ''::character varying NOT NULL,
     logo character varying(255) DEFAULT ''::character varying NOT NULL,
     activo boolean DEFAULT true NOT NULL
@@ -303,6 +300,83 @@ ALTER TABLE public.proveedores ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY 
     NO MINVALUE
     NO MAXVALUE
     CACHE 1
+);
+
+
+--
+-- Name: contactos_proveedor; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.contactos_proveedor (
+    id integer NOT NULL,
+    id_proveedor integer NOT NULL,
+    nombre character varying(150) NOT NULL,
+    cargo character varying(120) DEFAULT ''::character varying NOT NULL,
+    email character varying(254) DEFAULT ''::character varying NOT NULL,
+    telefono character varying(30) DEFAULT ''::character varying NOT NULL,
+    activo boolean DEFAULT true NOT NULL
+);
+
+
+--
+-- Name: contactos_proveedor_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.contactos_proveedor ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.contactos_proveedor_id_seq
+    START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1
+);
+
+
+--
+-- Name: canales_proveedor; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.canales_proveedor (
+    id integer NOT NULL,
+    id_proveedor integer NOT NULL,
+    id_contacto integer,
+    nombre character varying(100) NOT NULL,
+    medio character varying(20) NOT NULL,
+    valor character varying(255) NOT NULL,
+    funcion character varying(150) DEFAULT ''::character varying NOT NULL,
+    activo boolean DEFAULT true NOT NULL,
+    CONSTRAINT uq_canal_medio_valor_proveedor UNIQUE (id_proveedor, medio, valor)
+);
+
+
+--
+-- Name: canales_proveedor_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.canales_proveedor ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.canales_proveedor_id_seq
+    START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1
+);
+
+
+--
+-- Name: horarios_contacto; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.horarios_contacto (
+    id integer NOT NULL,
+    id_contacto integer NOT NULL,
+    dia_semana smallint NOT NULL,
+    hora_inicio time without time zone NOT NULL,
+    hora_fin time without time zone NOT NULL,
+    CONSTRAINT chk_horario_contacto_intervalo CHECK (hora_fin > hora_inicio),
+    CONSTRAINT uq_horario_contacto_inicio UNIQUE (id_contacto, dia_semana, hora_inicio)
+);
+
+
+--
+-- Name: horarios_contacto_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.horarios_contacto ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.horarios_contacto_id_seq
+    START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1
 );
 
 
@@ -521,6 +595,30 @@ ALTER TABLE ONLY public.proveedores
 
 
 --
+-- Name: contactos_proveedor contactos_proveedor_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.contactos_proveedor
+    ADD CONSTRAINT contactos_proveedor_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: canales_proveedor canales_proveedor_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.canales_proveedor
+    ADD CONSTRAINT canales_proveedor_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: horarios_contacto horarios_contacto_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.horarios_contacto
+    ADD CONSTRAINT horarios_contacto_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: tipos_venta tipos_venta_nombre_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -582,6 +680,38 @@ ALTER TABLE ONLY public.compras
 
 ALTER TABLE ONLY public.compras
     ADD CONSTRAINT fk_compra_proveedor FOREIGN KEY (id_proveedor) REFERENCES public.proveedores(id);
+
+
+--
+-- Name: contactos_proveedor fk_contacto_proveedor; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.contactos_proveedor
+    ADD CONSTRAINT fk_contacto_proveedor FOREIGN KEY (id_proveedor) REFERENCES public.proveedores(id) ON DELETE CASCADE;
+
+
+--
+-- Name: canales_proveedor fk_canal_proveedor; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.canales_proveedor
+    ADD CONSTRAINT fk_canal_proveedor FOREIGN KEY (id_proveedor) REFERENCES public.proveedores(id) ON DELETE CASCADE;
+
+
+--
+-- Name: canales_proveedor fk_canal_contacto; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.canales_proveedor
+    ADD CONSTRAINT fk_canal_contacto FOREIGN KEY (id_contacto) REFERENCES public.contactos_proveedor(id) ON DELETE SET NULL;
+
+
+--
+-- Name: horarios_contacto fk_horario_contacto; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.horarios_contacto
+    ADD CONSTRAINT fk_horario_contacto FOREIGN KEY (id_contacto) REFERENCES public.contactos_proveedor(id) ON DELETE CASCADE;
 
 
 --
