@@ -25,7 +25,7 @@ function App() {
     setAccessToken(tokens.access);
     if (tokens.refresh) setRefreshToken(tokens.refresh);
   }, [setAccessToken, setRefreshToken]);
-  const { apiRequest, requestPublic } = useClienteApi({
+  const { apiRequest, apiDownload, requestPublic } = useClienteApi({
     accessToken: auth.accessToken,
     refreshToken: auth.refreshToken,
     onTokensRenovados,
@@ -43,7 +43,7 @@ function App() {
     resumenDashboard: resumen.resumenDashboard, totalVentas: resumen.totalVentas,
   });
   const compras = useCompras({
-    apiRequest, logueado: auth.logueado, seccion, esAdministrador,
+    apiRequest, apiDownload, logueado: auth.logueado, seccion, esAdministrador,
     revisionProductos: inventario.revision, invalidarInventario: inventario.invalidar,
     cargarDatos: resumen.cargarDatos, accessToken: auth.accessToken,
     catalogos: resumen.catalogos, setCatalogos: resumen.setCatalogos,

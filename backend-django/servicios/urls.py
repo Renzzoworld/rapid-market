@@ -2,7 +2,7 @@ from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views import APIIndexView
 from .modulos.autenticacion.vistas import LoginView, LogoutView
-from .modulos.compras.vistas import PurchaseActionView, PurchasesView
+from .modulos.compras.vistas import PurchaseActionView, PurchaseOrderDefaultsView, PurchaseOrderPDFView, PurchasesView
 from .modulos.gastos.vistas import ExpensesView
 from .modulos.inventario.vistas import ProductDetailView, ProductListView
 from .modulos.proveedores.vistas import CanalProveedorDetailView, CanalesProveedorView, CatalogosProveedorView, ContactoProveedorDetailView, ContactosProveedorView, ProviderDetailView, ProvidersManagementView
@@ -28,6 +28,8 @@ urlpatterns = [
     path('products/<int:product_id>/', ProductDetailView.as_view(), name='product_detail'),
     path('sales/', SalesView.as_view(), name='sales'),
     path('purchases/', PurchasesView.as_view(), name='purchases'),
+    path('purchases/order-defaults/', PurchaseOrderDefaultsView.as_view(), name='purchase_order_defaults'),
+    path('purchases/<int:purchase_id>/order-pdf/', PurchaseOrderPDFView.as_view(), name='purchase_order_pdf'),
     path('purchases/<int:purchase_id>/<str:action>/', PurchaseActionView.as_view(), name='purchase_action'),
     path('expenses/', ExpensesView.as_view(), name='expenses'),
 ]

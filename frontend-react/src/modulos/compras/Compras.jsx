@@ -2,9 +2,14 @@ import { useContextoAplicacion } from "../../compartido/contexto/useContextoApli
 import Paginacion from "../../compartido/componentes/Paginacion.jsx";
 import SugerenciasProductos from "../../compartido/componentes/SugerenciasProductos.jsx";
 
+const fechaHoyLocal = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+};
+
 export function Compras() {
   const { estadoCompras } = useContextoAplicacion();
-  const { busquedaCompras, cargandoCompras, comprasFiltradas, errorCompras, esAdministrador, obtenerCodigoCompra, obtenerEstadoCompra, obtenerLotesCompra, paginaCompras, resumenDashboard, seccion, setBusquedaCompras, setBusquedaProductoCompra, setCarritoCompra, setCompraSeleccionada, setCompraVerificando, setFechasVencimiento, setMostrarCompra, setPaginaCompras, setPaginaProductosCompra, setProductosCompraOpciones, totalCompras, totalComprasRegistros } = estadoCompras;
+  const { abrirNuevaCompra, busquedaCompras, cargandoCompras, comprasFiltradas, errorCompras, esAdministrador, obtenerCodigoCompra, obtenerEstadoCompra, obtenerLotesCompra, paginaCompras, resumenDashboard, seccion, setBusquedaCompras, setCompraSeleccionada, setCompraVerificando, setFechasVencimiento, setPaginaCompras, totalCompras, totalComprasRegistros } = estadoCompras;
 
   return (
     <>
@@ -19,13 +24,7 @@ export function Compras() {
 
               <button
                 className="primary-button"
-                onClick={() => {
-                  setBusquedaProductoCompra("");
-                  setProductosCompraOpciones([]);
-                  setPaginaProductosCompra(1);
-                  setCarritoCompra([]);
-                  setMostrarCompra(true);
-                }}
+                onClick={abrirNuevaCompra}
               >
                 + Nueva compra
               </button>
@@ -62,7 +61,7 @@ export function Compras() {
                 />
               </div>
 
-              <div className="table-container">
+              <div className="table-container module-list-table">
 
                 <table>
 
@@ -72,7 +71,7 @@ export function Compras() {
                       <th>Fecha de compra</th>
                       <th>Proveedor</th>
                       <th>Cantidad de lotes</th>
-                      <th>Costo</th>
+                      <th>Total (IGV incluido)</th>
                       <th>Estado</th>
                       <th>Detalles</th>
                       <th>Verificar</th>
@@ -159,7 +158,7 @@ export function Compras() {
 
 export function DetalleCompra() {
   const { estadoCompras } = useContextoAplicacion();
-  const { calcularTotalCompra, compraSeleccionada, obtenerCodigoCompra, obtenerCodigoLote, obtenerLotesCompra, setCompraSeleccionada } = estadoCompras;
+  const { compraSeleccionada, verOrdenCompraPDF, cerrarVistaPreviaOrden, ordenCompraPdf, cargandoOrdenCompraPdf, obtenerCodigoCompra, obtenerCodigoLote, obtenerLotesCompra, setCompraSeleccionada } = estadoCompras;
 
   return (
     <>
@@ -174,7 +173,7 @@ export function DetalleCompra() {
               <button
                 type="button"
                 className="modal-close"
-                onClick={() => setCompraSeleccionada(null)}
+                onClick={() => { cerrarVistaPreviaOrden(); setCompraSeleccionada(null); }}
                 aria-label="Cerrar detalles de compra"
               >
                 ×
@@ -222,19 +221,32 @@ export function DetalleCompra() {
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr>
-                    <td colSpan="6">
-                      <strong>Total de compra</strong>
-                    </td>
-                    <td>
-                      <strong className="money-value">
-                        <span>S/</span>
-                        <span>{calcularTotalCompra(compraSeleccionada).toFixed(2)}</span>
-                      </strong>
-                    </td>
-                  </tr>
+                  <tr><td colSpan="6"><strong>Subtotal</strong></td><td colSpan="2">S/ {Number(compraSeleccionada.subtotal || 0).toFixed(2)}</td></tr>
                 </tfoot>
               </table>
+            </div>
+            <div className="purchase-order-info">
+              <p><strong>Proveedor:</strong> {compraSeleccionada.razonSocialProveedor || compraSeleccionada.proveedor} · RUC {compraSeleccionada.rucProveedor || "—"}</p>
+              <p><strong>Correo y teléfono seleccionados:</strong> {compraSeleccionada.correoProveedor || "—"} · {compraSeleccionada.telefonoProveedor || "—"}</p>
+              {compraSeleccionada.nombreContactoProveedor && <p><strong>Contacto:</strong> {compraSeleccionada.nombreContactoProveedor} · {compraSeleccionada.cargoContactoProveedor} · {[compraSeleccionada.telefonoContactoProveedor, compraSeleccionada.correoContactoProveedor].filter(Boolean).join(" · ")}</p>}
+              <p><strong>Entrega requerida:</strong> {compraSeleccionada.fechaEntregaRequerida || "—"}</p>
+              <p><strong>Lugar de entrega:</strong> {compraSeleccionada.lugarEntrega || "—"}</p>
+            </div>
+            <div className="modal-actions"><button type="button" className="primary-button" disabled={cargandoOrdenCompraPdf} onClick={() => verOrdenCompraPDF(compraSeleccionada)}>{cargandoOrdenCompraPdf ? "Preparando PDF..." : "Ver orden de compra PDF"}</button></div>
+          </div>
+        </div>
+      )}
+      {ordenCompraPdf && (
+        <div className="modal-overlay purchase-pdf-overlay" role="dialog" aria-modal="true" aria-label="Vista previa de orden de compra">
+          <div className="modal-card purchase-pdf-modal">
+            <div className="modal-header">
+              <div><h2>Orden de compra</h2><p>Vista previa del documento antes de descargarlo.</p></div>
+              <button type="button" className="modal-close" onClick={cerrarVistaPreviaOrden} aria-label="Cerrar vista previa">×</button>
+            </div>
+            <iframe className="purchase-pdf-frame" src={ordenCompraPdf.url} title="Vista previa de la orden de compra" />
+            <div className="modal-actions">
+              <button type="button" className="secondary-button" onClick={cerrarVistaPreviaOrden}>Volver a detalles</button>
+              <a className="primary-button purchase-pdf-download" href={ordenCompraPdf.url} download={ordenCompraPdf.filename}>Descargar PDF</a>
             </div>
           </div>
         </div>
@@ -304,10 +316,9 @@ export function VerificarCompra() {
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr>
-                    <td colSpan="4"><strong>Total final</strong></td>
-                    <td><strong>S/ {calcularTotalCompra(compraVerificando).toFixed(2)}</strong></td>
-                  </tr>
+                  <tr><td colSpan="4"><strong>Subtotal</strong></td><td>S/ {Number(compraVerificando.subtotal || 0).toFixed(2)}</td></tr>
+                  <tr><td colSpan="4"><strong>IGV {compraVerificando.igvPorcentaje == null ? "" : `(${compraVerificando.igvPorcentaje.toFixed(2)}%)`}</strong></td><td>S/ {Number(compraVerificando.igvMonto || 0).toFixed(2)}</td></tr>
+                  <tr><td colSpan="4"><strong>Total final</strong></td><td><strong>S/ {calcularTotalCompra(compraVerificando).toFixed(2)}</strong></td></tr>
                 </tfoot>
               </table>
             </div>
@@ -376,310 +387,76 @@ export function VerificarCompra() {
 }
 export function FormularioCompra() {
   const { estadoCompras } = useContextoAplicacion();
-  const { agregarProductoCompra, busquedaProductoCompra, busquedaProveedorCompra, cambiarCantidadProductoCompra, cargandoProductosCompra, cargandoProveedores, carritoCompra, errorProveedores, mostrarCompra, nuevaCompra, paginaProductosCompra, productoSeleccionadoCompra, productosCompraFiltrados, proveedoresFiltrados, registrarCompra, setBusquedaProductoCompra, setBusquedaProveedorCompra, setCarritoCompra, setMostrarCompra, setNuevaCompra, setPaginaProductosCompra, setProductosCompraOpciones, setTotalProductosCompraOpciones, totalCarritoCompra, totalProductosCompraOpciones } = estadoCompras;
+  const {
+    agregarProductoCompra, busquedaProductoCompra, busquedaProveedorCompra,
+    cambiarCantidadProductoCompra, cargandoProductosCompra, cargandoProveedores,
+    cargandoDetalleProveedorCompra, carritoCompra, errorProveedores, mostrarCompra,
+    nuevaCompra, ordenCompraDefaults, proveedorCompraDetalle, paginaProductosCompra,
+    productoSeleccionadoCompra, productosCompraFiltrados, proveedoresFiltrados,
+    registrarCompra, seleccionarProveedorCompra, cerrarNuevaCompra,
+    setBusquedaProductoCompra, setBusquedaProveedorCompra, setCarritoCompra,
+    setNuevaCompra, setProveedorCompraDetalle, setPaginaProductosCompra, setProductosCompraOpciones,
+    setTotalProductosCompraOpciones, subtotalCarritoCompra, porcentajeIgvCompra,
+    igvCarritoCompra, totalFinalCompra, totalProductosCompraOpciones,
+  } = estadoCompras;
+  const correosProveedor = (proveedorCompraDetalle?.datos_contacto || []).filter((item) => item.tipo === "correo");
+  const telefonosProveedor = (proveedorCompraDetalle?.datos_contacto || []).filter((item) => item.tipo === "telefono");
+  const contactosProveedor = (proveedorCompraDetalle?.contacts || []).filter((item) => item.activo !== false);
 
   return (
     <>
-      {/* =====================================================
-          MODAL NUEVA COMPRA
-      ===================================================== */}
       {mostrarCompra && (
         <div className="modal-overlay">
-
-          <div className="modal-card">
-
+          <div className="modal-card purchase-form-modal">
             <div className="modal-header">
-
-              <div>
-                <h2>Nueva compra</h2>
-                <p>Registra una compra al proveedor</p>
-              </div>
-
-              <button
-                className="modal-close"
-                onClick={() => {
-                  setMostrarCompra(false);
-                  setNuevaCompra({
-                    proveedor: "",
-                    productoId: "",
-                    cantidad: 1,
-                    precioUnitario: "",
-                  });
-                  setBusquedaProveedorCompra("");
-                  setBusquedaProductoCompra("");
-                  setProductosCompraOpciones([]);
-                  setPaginaProductosCompra(1);
-                  setCarritoCompra([]);
-                }}
-              >
-                ×
-              </button>
-
+              <div><h2>Nueva orden de compra</h2><p>Los precios unitarios se ingresan sin IGV.</p></div>
+              <button type="button" className="modal-close" onClick={cerrarNuevaCompra} aria-label="Cerrar">×</button>
             </div>
-
             <form onSubmit={registrarCompra}>
-
-              <div className="form-group">
-
-                <label>Proveedor</label>
-
-                <div className="product-autocomplete">
-                  <input
-                    type="text"
-                    placeholder={cargandoProveedores ? "Cargando proveedores..." : "Escribe para buscar un proveedor"}
-                    value={busquedaProveedorCompra}
-                    disabled={carritoCompra.length > 0 || cargandoProveedores || Boolean(errorProveedores)}
-                    onChange={(e) => {
-                      setBusquedaProveedorCompra(e.target.value);
-                      setNuevaCompra({ ...nuevaCompra, proveedor: "" });
-                    }}
-                  />
-
-                  {busquedaProveedorCompra.trim() && !nuevaCompra.proveedor && (
-                    <div className="product-suggestions">
-                      {proveedoresFiltrados.length > 0 ? (
-                        proveedoresFiltrados.map((proveedor) => (
-                          <button
-                            type="button"
-                            className="product-suggestion"
-                            key={proveedor.id}
-                            onClick={() => {
-                              setBusquedaProveedorCompra(proveedor.name);
-                              setNuevaCompra({ ...nuevaCompra, proveedor: proveedor.name, productoId: "" });
-                              setBusquedaProductoCompra("");
-                              setProductosCompraOpciones([]);
-                            }}
-                          >
-                            <span>{proveedor.name}</span>
-                          </button>
-                        ))
-                      ) : (
-                        <p className="product-suggestions-empty">
-                          No se encontraron proveedores.
-                        </p>
-                      )}
-                    </div>
-                  )}
+              <fieldset className="provider-form-section purchase-section"><legend>Proveedor y entrega</legend>
+                <div className="form-group"><label>Proveedor *</label><div className="product-autocomplete">
+                  <input type="text" placeholder={cargandoProveedores ? "Cargando proveedores..." : "Escribe para buscar un proveedor"} value={busquedaProveedorCompra} disabled={carritoCompra.length > 0 || cargandoProveedores || cargandoDetalleProveedorCompra || Boolean(errorProveedores)} onChange={(event) => {
+                    setBusquedaProveedorCompra(event.target.value);
+                    setProveedorCompraDetalle(null);
+                    setNuevaCompra({ ...nuevaCompra, proveedor: event.target.value, providerId: "", providerEmailId: "", providerPhoneId: "", contactId: "" });
+                  }} />
+                  {busquedaProveedorCompra.trim() && !nuevaCompra.providerId && <div className="product-suggestions">{proveedoresFiltrados.length ? proveedoresFiltrados.map((provider) => <button type="button" className="product-suggestion" key={provider.id} onClick={() => seleccionarProveedorCompra(provider)}><span>{provider.name}</span></button>) : <p className="product-suggestions-empty">No se encontraron proveedores.</p>}</div>}
+                </div>{cargandoDetalleProveedorCompra && <p className="field-hint">Cargando los datos de contacto...</p>}{errorProveedores && <p className="field-error" role="alert">{errorProveedores}</p>}</div>
+                {proveedorCompraDetalle && <>
+                <div className="purchase-contact-grid">
+                  <label className="form-group">Correo del proveedor *<select required value={nuevaCompra.providerEmailId} onChange={(event) => setNuevaCompra({ ...nuevaCompra, providerEmailId: event.target.value })}><option value="">Seleccionar correo</option>{correosProveedor.map((item) => <option key={item.id} value={item.id}>{item.valor}</option>)}</select></label>
+                  <label className="form-group">Teléfono del proveedor *<select required value={nuevaCompra.providerPhoneId} onChange={(event) => setNuevaCompra({ ...nuevaCompra, providerPhoneId: event.target.value })}><option value="">Seleccionar teléfono</option>{telefonosProveedor.map((item) => <option key={item.id} value={item.id}>{item.valor}</option>)}</select></label>
+                  <label className="form-group purchase-contact-full">Contacto (opcional)<select value={nuevaCompra.contactId} onChange={(event) => setNuevaCompra({ ...nuevaCompra, contactId: event.target.value })}><option value="">Sin contacto específico</option>{contactosProveedor.map((contact) => <option key={contact.id} value={contact.id}>{contact.nombre} · {contact.cargo_nombre === "Otros" ? contact.cargo_otro : contact.cargo_nombre}</option>)}</select></label>
+                  {(!correosProveedor.length || !telefonosProveedor.length) && <p className="field-error purchase-contact-full">Registra al menos un correo y un teléfono en los datos generales del proveedor para emitir una orden.</p>}
                 </div>
-                {errorProveedores && <p className="field-error" role="alert">No se pudieron cargar los proveedores: {errorProveedores}</p>}
-                {!cargandoProveedores && !errorProveedores && proveedoresFiltrados.length === 0 && (
-                  <p className="field-hint">
-                    {busquedaProveedorCompra.trim() ? "No se encontraron proveedores con esa búsqueda." : "No hay proveedores activos. Regístralos desde el módulo Proveedores."}
-                  </p>
-                )}
-
-              </div>
-
-              <div className="form-group">
-
-                <label>Producto {nuevaCompra.proveedor && <small> (categorías del proveedor seleccionado)</small>}</label>
-
-                <div className="product-autocomplete">
-                  <input
-                    type="text"
-                    placeholder="Escribe para buscar un producto"
-                    value={busquedaProductoCompra}
-                    onChange={(e) => {
-                      setBusquedaProductoCompra(e.target.value);
-                      setProductosCompraOpciones([]);
-                      setTotalProductosCompraOpciones(0);
-                      setPaginaProductosCompra(1);
-                      setNuevaCompra({ ...nuevaCompra, productoId: "" });
-                    }}
-                  />
-
-                  {busquedaProductoCompra.trim() && !productoSeleccionadoCompra && (
-                    <SugerenciasProductos
-                      productos={productosCompraFiltrados}
-                      cargando={cargandoProductosCompra}
-                      pagina={paginaProductosCompra}
-                      cantidad={totalProductosCompraOpciones}
-                      alCambiar={setPaginaProductosCompra}
-                      alSeleccionar={(producto) => {
-                        setBusquedaProductoCompra(producto.nombre);
-                        setNuevaCompra({ ...nuevaCompra, productoId: producto.id, precioUnitario: "" });
-                      }}
-                    />
-                  )}
+                <div className="purchase-contact-grid">
+                  <label className="form-group">Fecha requerida de entrega *<input type="date" required min={fechaHoyLocal()} value={nuevaCompra.fechaEntregaRequerida} onChange={(event) => setNuevaCompra({ ...nuevaCompra, fechaEntregaRequerida: event.target.value })} /></label>
+                  <label className="form-group">Lugar de entrega *<input required maxLength="250" value={nuevaCompra.lugarEntrega} onChange={(event) => setNuevaCompra({ ...nuevaCompra, lugarEntrega: event.target.value })} placeholder={ordenCompraDefaults?.company?.domicilio_fiscal || "Dirección de entrega"} /></label>
                 </div>
+                </>}
+              </fieldset>
 
-              </div>
-
-              <div className="form-group">
-
-                <div className="sale-quantity-row">
-                  <div>
-                    <label htmlFor="purchase-quantity">Cantidad</label>
-                    <input
-                      id="purchase-quantity"
-                      type="number"
-                      min="1"
-                      value={nuevaCompra.cantidad}
-                      onChange={(e) =>
-                        setNuevaCompra({
-                          ...nuevaCompra,
-                          cantidad: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="purchase-unit-price">
-    Precio unitario de compra
-  </label>
-
-  <input
-    id="purchase-unit-price"
-    type="number"
-    min="0.01"
-    step="0.01"
-    placeholder="Ej. 1.80"
-    value={nuevaCompra.precioUnitario}
-    disabled={!productoSeleccionadoCompra}
-    onChange={(e) =>
-      setNuevaCompra({
-        ...nuevaCompra,
-        precioUnitario: e.target.value,
-      })
-    }
-  />
-                  </div>
+              <fieldset className="provider-form-section purchase-section"><legend>Productos</legend>
+                <div className="form-group"><label>Producto {nuevaCompra.proveedor && <small>(categorías del proveedor)</small>}</label><div className="product-autocomplete">
+                  <input type="text" placeholder={nuevaCompra.providerId ? "Escribe para buscar un producto" : "Primero selecciona un proveedor"} disabled={!nuevaCompra.providerId} value={busquedaProductoCompra} onChange={(event) => { setBusquedaProductoCompra(event.target.value); setProductosCompraOpciones([]); setTotalProductosCompraOpciones(0); setPaginaProductosCompra(1); setNuevaCompra({ ...nuevaCompra, productoId: "" }); }} />
+                  {busquedaProductoCompra.trim() && !productoSeleccionadoCompra && <SugerenciasProductos productos={productosCompraFiltrados} cargando={cargandoProductosCompra} pagina={paginaProductosCompra} cantidad={totalProductosCompraOpciones} alCambiar={setPaginaProductosCompra} alSeleccionar={(producto) => { setBusquedaProductoCompra(producto.nombre); setNuevaCompra({ ...nuevaCompra, productoId: producto.id, precioUnitario: "" }); }} />}
+                </div></div>
+                <div className="sale-quantity-row"><div><label htmlFor="purchase-quantity">Cantidad</label><input id="purchase-quantity" type="number" min="0.001" step="0.001" value={nuevaCompra.cantidad} onChange={(event) => setNuevaCompra({ ...nuevaCompra, cantidad: event.target.value })} /></div>
+                  <div><label htmlFor="purchase-unit-price">Precio unitario sin IGV</label><input id="purchase-unit-price" type="number" min="0.01" step="0.01" placeholder="Ej. 1.80" value={nuevaCompra.precioUnitario} disabled={!productoSeleccionadoCompra} onChange={(event) => setNuevaCompra({ ...nuevaCompra, precioUnitario: event.target.value })} /></div>
                 </div>
+                <button type="button" className="add-product-button" onClick={agregarProductoCompra}>+ Agregar producto</button>
+                {carritoCompra.length > 0 ? <div className="sale-products-table-container"><table className="sale-products-table"><thead><tr><th>N°</th><th>Producto</th><th>Cantidad</th><th>Precio unitario</th><th>Importe</th><th aria-label="Acciones" /></tr></thead><tbody>
+                  {carritoCompra.map((item, index) => <tr key={`${item.id}-${index}`}><td>{String(index + 1).padStart(2, "0")}</td><td>{item.nombre}</td><td><div className="quantity-controls"><button type="button" onClick={() => cambiarCantidadProductoCompra(index, -1)} aria-label={`Disminuir cantidad de ${item.nombre}`}>-</button><strong>{item.cantidad}</strong><button type="button" onClick={() => cambiarCantidadProductoCompra(index, 1)} aria-label={`Aumentar cantidad de ${item.nombre}`}>+</button></div></td><td>S/ {item.precioUnitario.toFixed(2)}</td><td>S/ {(item.precioUnitario * item.cantidad).toFixed(2)}</td><td><button type="button" className="remove-product-button" onClick={() => setCarritoCompra(carritoCompra.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Eliminar ${item.nombre}`} title="Eliminar producto">🗑️</button></td></tr>)}
+                </tbody></table></div> : <p className="sale-products-empty">Todavía no has agregado productos.</p>}
+                <div className="purchase-totals"><div><span>Subtotal</span><strong>S/ {subtotalCarritoCompra.toFixed(2)}</strong></div><div><span>IGV ({porcentajeIgvCompra.toFixed(2)}%)</span><strong>S/ {igvCarritoCompra.toFixed(2)}</strong></div><div className="purchase-grand-total"><span>Total final</span><strong>S/ {totalFinalCompra.toFixed(2)}</strong></div></div>
+              </fieldset>
 
-                <button
-                  type="button"
-                  className="add-product-button"
-                  onClick={agregarProductoCompra}
-                >
-                  + Agregar producto
-                </button>
-
-              </div>
-
-              <div className="form-group">
-
-                <label>Costo total de compra</label>
-                <strong>S/ {totalCarritoCompra.toFixed(2)}</strong>
-
-              </div>
-
-              <div className="form-group sale-products-group">
-
-                <label>Productos agregados</label>
-
-                {carritoCompra.length > 0 ? (
-                  <div className="sale-products-table-container">
-                    <table className="sale-products-table">
-                      <thead>
-                        <tr>
-                          <th>ID lote</th>
-                          <th>Producto</th>
-                          <th>Cantidad</th>
-                          <th>Precio unitario</th>
-                          <th>Subtotal</th>
-                          <th aria-label="Acciones"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {carritoCompra.map((item, indice) => (
-                          <tr key={`${item.id}-${indice}`}>
-                            <td>Se asignará al guardar</td>
-                            <td>{item.nombre}</td>
-                            <td>
-                              <div className="quantity-controls">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    cambiarCantidadProductoCompra(indice, -1)
-                                  }
-                                  aria-label={`Disminuir cantidad de ${item.nombre}`}
-                                >
-                                  -
-                                </button>
-                                <strong>{item.cantidad}</strong>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    cambiarCantidadProductoCompra(indice, 1)
-                                  }
-                                  aria-label={`Aumentar cantidad de ${item.nombre}`}
-                                >
-                                  +
-                                </button>
-                              </div>
-                            </td>
-                            <td>S/ {item.precioUnitario.toFixed(2)}</td>
-                            <td>
-                              S/ {(item.precioUnitario * item.cantidad).toFixed(2)}
-                            </td>
-                            <td>
-                              <button
-                                type="button"
-                                className="remove-product-button"
-                                onClick={() =>
-                                  setCarritoCompra(
-                                    carritoCompra.filter((_, itemIndex) => itemIndex !== indice)
-                                  )
-                                }
-                                aria-label={`Eliminar ${item.nombre}`}
-                                title="Eliminar producto"
-                              >
-                                🗑️
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <p className="sale-products-empty">
-                    Todavía no has agregado productos.
-                  </p>
-                )}
-
-              </div>
-
-              <div className="modal-actions">
-
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => {
-                    setMostrarCompra(false);
-                    setNuevaCompra({
-                      proveedor: "",
-                      productoId: "",
-                      cantidad: 1,
-                      precioUnitario: "",
-                    });
-                    setBusquedaProveedorCompra("");
-                    setBusquedaProductoCompra("");
-                    setProductosCompraOpciones([]);
-                    setCarritoCompra([]);
-                  }}
-                >
-                  Cancelar
-                </button>
-
-                <button
-                  type="submit"
-                  className="primary-button"
-                >
-                  Registrar compra
-                </button>
-
-              </div>
-
+              <fieldset className="provider-form-section purchase-section"><legend>Observaciones</legend><textarea rows="3" maxLength="2000" value={nuevaCompra.observaciones} onChange={(event) => setNuevaCompra({ ...nuevaCompra, observaciones: event.target.value })} placeholder="Opcional" /></fieldset>
+              <div className="modal-actions"><button type="button" className="secondary-button" onClick={cerrarNuevaCompra}>Cancelar</button><button type="submit" className="primary-button">Emitir orden de compra</button></div>
             </form>
-
           </div>
-
         </div>
       )}
-
-
     </>
   );
 }

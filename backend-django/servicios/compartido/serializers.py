@@ -64,6 +64,12 @@ class ArticuloCompraSerializer(serializers.Serializer):
 
 class CompraSerializer(serializers.Serializer):
     provider_id = serializers.IntegerField(min_value=1)
+    provider_email_id = serializers.IntegerField(min_value=1)
+    provider_phone_id = serializers.IntegerField(min_value=1)
+    contact_id = serializers.IntegerField(min_value=1, required=False, allow_null=True)
+    requested_delivery_date = serializers.DateField()
+    delivery_address = serializers.CharField(max_length=250, trim_whitespace=True)
+    observations = serializers.CharField(max_length=2000, trim_whitespace=False, allow_blank=True, required=False, default='')
     items = ArticuloCompraSerializer(many=True, allow_empty=False, max_length=100)
 
 
@@ -80,6 +86,7 @@ class ProveedorSerializer(serializers.Serializer):
     address = serializers.CharField(max_length=250, trim_whitespace=True)
     categorias = JSONListField()
     horarios = JSONListField()
+    datos_contacto = JSONListField()
     logo_file = ImagenValidadaField(required=False)
 
 
@@ -97,6 +104,7 @@ class ActualizarProveedorSerializer(serializers.Serializer):
     )
     categorias = JSONListField(required=False)
     horarios = JSONListField(required=False)
+    datos_contacto = JSONListField(required=False)
     logo_file = ImagenValidadaField(required=False)
     active = serializers.BooleanField(required=False)
 

@@ -2,7 +2,7 @@ import { useContextoAplicacion } from "../../compartido/contexto/useContextoApli
 
 export function Inventario() {
   const { estadoInventario } = useContextoAplicacion();
-  const { abrirEditarProducto, abrirNuevoProducto, busqueda, cargandoInventario, eliminarProducto, errorInventario, esAdministrador, paginaInventario, paginasInventario, productosFiltrados, resumenDashboard, seccion, setBusqueda, setPaginaInventario, totalPaginasInventario, totalProductosInventario, verDetallesProducto } = estadoInventario;
+  const { abrirEditarProducto, abrirNuevoProducto, busqueda, cargandoInventario, eliminarProducto, errorInventario, esAdministrador, paginaInventario, paginasInventario, productosFiltrados, resumenDashboard, seccion, setBusqueda, setPaginaInventario, totalPaginasInventario, totalProductosInventario, verDetallesProducto, categoriaSeleccionada, categoriasProducto, setCategoriaSeleccionada } = estadoInventario;
 
   return (
     <>
@@ -52,9 +52,16 @@ export function Inventario() {
                   }}
                 />
 
+                <div className="inventory-category-filters" role="group" aria-label="Filtrar productos por categoría">
+                  <button type="button" className={!categoriaSeleccionada ? "active" : ""} aria-pressed={!categoriaSeleccionada} onClick={() => setCategoriaSeleccionada("")}>Todas</button>
+                  {categoriasProducto.map((categoria) => (
+                    <button key={categoria.id} type="button" className={String(categoria.id) === categoriaSeleccionada ? "active" : ""} aria-pressed={String(categoria.id) === categoriaSeleccionada} onClick={() => setCategoriaSeleccionada(String(categoria.id))}>{categoria.name || categoria.nombre}</button>
+                  ))}
+                </div>
+
               </div>
 
-              <div className="table-container">
+              <div className="table-container module-list-table">
 
                 <table>
 

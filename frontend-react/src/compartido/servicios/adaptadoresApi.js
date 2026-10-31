@@ -28,13 +28,23 @@ export const mapearVenta = (sale) => ({
 
 export const mapearCompra = (purchase) => ({
   idCompra: purchase.id, fecha: fechaVista(purchase.fecha), proveedor: purchase.provider,
+  razonSocialProveedor: purchase.provider_legal_name, rucProveedor: purchase.provider_ruc,
+  correoProveedor: purchase.provider_email, telefonoProveedor: purchase.provider_phone,
+  nombreContactoProveedor: purchase.contact_name, cargoContactoProveedor: purchase.contact_role,
+  telefonoContactoProveedor: purchase.contact_phone, correoContactoProveedor: purchase.contact_email,
+  fechaEntregaRequerida: fechaVista(purchase.requested_delivery_date), lugarEntrega: purchase.delivery_address,
+  observaciones: purchase.observations || "", subtotal: Number(purchase.subtotal || 0),
+  igvPorcentaje: purchase.igv_rate == null ? null : Number(purchase.igv_rate),
+  igvMonto: Number(purchase.igv_amount || 0), total: Number(purchase.total || 0),
+  datosEmpresa: purchase.company || {}, responsableNombre: purchase.responsible_name || "",
+  responsableRol: purchase.responsible_role || "",
   costo: Number(purchase.total), estado: purchase.state,
   lotes: purchase.items.map((item) => ({
     idLote: item.lot_id, idDetalle: item.detail_id, idProducto: item.product_id,
     fecha: fechaVista(purchase.fecha), producto: item.name, cantidad: Number(item.quantity),
     cantidadInicial: Number(item.quantity), cantidadActual: Number(item.current_quantity),
     precioUnitario: Number(item.unit_price), precioCompraUnitario: Number(item.unit_price),
-    subtotal: Number(item.quantity) * Number(item.unit_price), perecible: item.perishable,
+    subtotal: Number(item.amount ?? Number(item.quantity) * Number(item.unit_price)), perecible: item.perishable,
     fechaVencimiento: fechaVista(item.expiry_date),
   })),
 });

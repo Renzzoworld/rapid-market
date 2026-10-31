@@ -55,7 +55,7 @@ export function Gastos() {
                 />
               </div>
 
-              <div className="table-container">
+              <div className="table-container module-list-table">
 
                 <table>
 

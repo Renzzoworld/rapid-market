@@ -4,6 +4,7 @@ import { useConsultaPaginada } from "../../compartido/hooks/useConsultaPaginada.
 
 export function useInventario({ apiRequest, logueado, seccion, catalogos, esAdministrador, resumenDashboard }) {
   const [busqueda, setBusqueda] = useState("");
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState("");
   const [revision, setRevision] = useState(0);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [productoEditando, setProductoEditando] = useState(null);
@@ -12,6 +13,7 @@ export function useInventario({ apiRequest, logueado, seccion, catalogos, esAdmi
   const consulta = useConsultaPaginada({
     apiRequest, ruta: "/products/",
     habilitada: logueado && seccion === "inventario", busqueda, revision, mapear: mapearProducto,
+    categoryIds: categoriaSeleccionada ? [categoriaSeleccionada] : [],
   });
   const abrirNuevoProducto = () => {
     setProductoEditando(null);
@@ -76,6 +78,8 @@ export function useInventario({ apiRequest, logueado, seccion, catalogos, esAdmi
       paginaInventario: consulta.pagina, paginasInventario, productoEditando,
       productoInventarioSeleccionado, productosFiltrados: consulta.registros,
       resumenDashboard, seccion, setBusqueda, setMostrarFormulario, setNuevoProducto,
+      categoriaSeleccionada, categoriasProducto: catalogos?.product_categories || [],
+      setCategoriaSeleccionada: (id) => { setCategoriaSeleccionada(id); consulta.setPagina(1); },
       setPaginaInventario: consulta.setPagina, setProductoInventarioSeleccionado,
       totalPaginasInventario, totalProductosInventario: consulta.total, verDetallesProducto,
     },

@@ -95,13 +95,9 @@ def dashboard_summary(user_id=None, include_financials=True):
         purchases = one("""
             SELECT COUNT(*) AS purchase_count,
                    COALESCE(SUM(CASE WHEN ec.nombre = 'Entregado'
-                       THEN totals.total ELSE 0 END), 0) AS total
+                       THEN c.total ELSE 0 END), 0) AS total
             FROM compras c
             JOIN estados_compra ec ON ec.id = c.id_estado
-            JOIN (
-                SELECT id_compra, SUM(cantidad * precio_unitario) AS total
-                FROM detalle_compras GROUP BY id_compra
-            ) totals ON totals.id_compra = c.id
         """)
         summary.update({
             "cost_of_goods_sold": costs["total"],

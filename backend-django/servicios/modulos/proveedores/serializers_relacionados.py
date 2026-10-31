@@ -1,9 +1,26 @@
 from rest_framework import serializers
 
 from ...models import (
-    CanalesProveedor, ContactosProveedor, DatosContactoProveedor,
+    CanalesProveedor, ContactosProveedor, DatosContactoProveedor, DatosProveedor,
     HorariosContacto, HorariosProveedor,
 )
+
+
+class DatosProveedorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DatosProveedor
+        fields = ['id', 'tipo', 'valor']
+        read_only_fields = ['id']
+
+    def validate(self, attrs):
+        tipo = attrs.get('tipo')
+        valor = attrs.get('valor', '').strip()
+        if tipo == 'correo':
+            serializers.EmailField().run_validation(valor)
+        if tipo == 'telefono' and not (7 <= len(valor) <= 30):
+            raise serializers.ValidationError({'valor': 'El teléfono debe tener entre 7 y 30 caracteres.'})
+        attrs['valor'] = valor
+        return attrs
 
 
 class HorarioSerializer(serializers.ModelSerializer):

@@ -403,6 +403,7 @@ body {
 
 .inventory-toolbar {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
@@ -416,6 +417,29 @@ body {
   border-radius: 8px;
   font-size: 15px;
   outline: none;
+}
+
+.inventory-category-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  margin-top: 12px;
+}
+
+.inventory-category-filters button {
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: #fff;
+  color: #374151;
+  cursor: pointer;
+}
+
+.inventory-category-filters button.active {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
 }
 
 .inventory-toolbar input:focus {
@@ -464,6 +488,13 @@ body {
   max-height: 570px;
   overflow: auto;
   direction: rtl;
+}
+
+/* Las tablas principales de estos módulos crecen con sus filas; conservan la paginación existente. */
+.module-list-table {
+  max-height: none;
+  overflow: visible;
+  direction: ltr;
 }
 
 .table-container table {
@@ -1404,6 +1435,26 @@ body {
 .provider-form-section > legend { padding: 0 .35rem; font-weight: 700; color: #334155; }
 .provider-detail-block > h3 { margin: 0 0 1rem; color: #1f2937; }
 .provider-detail-block.provider-related-section { margin-top: 1rem; }
+.provider-contact-entry { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .65rem; }
+.provider-active-field { display: flex; align-items: center; gap: .45rem; }
+.provider-active-field input { width: auto; }
+.purchase-form-modal { max-width: 850px; max-height: 90vh; overflow-y: auto; }
+.purchase-section { margin-bottom: 1rem; }
+.purchase-contact-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem 1rem; }
+.purchase-contact-full { grid-column: 1 / -1; }
+.purchase-totals { display: grid; gap: .5rem; max-width: 340px; margin: 1rem 0 0 auto; }
+.purchase-totals > div { display: flex; justify-content: space-between; gap: 1rem; color: #475569; }
+.purchase-totals .purchase-grand-total { padding-top: .6rem; border-top: 1px solid #94a3b8; color: #17324d; font-size: 1.05rem; }
+.purchase-pdf-overlay { z-index: 1010; }
+.purchase-pdf-modal { max-width: 1100px; height: min(90vh, 900px); display: flex; flex-direction: column; }
+.purchase-pdf-frame { width: 100%; flex: 1; min-height: 0; border: 1px solid #d5dee8; border-radius: 8px; background: #f1f5f9; }
+.purchase-pdf-download { display: inline-flex; align-items: center; text-decoration: none; }
+.purchase-order-info { margin-top: 1rem; padding: .8rem 1rem; border: 1px solid #dbe3ed; border-radius: 9px; background: #f8fafc; color: #475569; }
+.purchase-order-info p { margin: .35rem 0; overflow-wrap: anywhere; }
+
+@media (max-width: 800px) {
+  .purchase-pdf-modal { height: 92vh; padding: 18px; }
+}
 
 .provider-related-section > header,
 .related-detail > header {
@@ -1488,8 +1539,8 @@ body {
 }
 
 .schedule-step-title { margin: .25rem 0; font-weight: 600; color: #334155; }
-.schedule-days { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .6rem; }
-.schedule-days label { display: inline-flex; gap: .4rem; align-items: center; border: 1px solid #cbd5e1; border-radius: 999px; padding: .45rem .75rem; cursor: pointer; background: #fff; }
+.schedule-days { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: .5rem; margin-bottom: .6rem; }
+.schedule-days label { display: inline-flex; gap: .5rem; align-items: center; border: 1px solid #cbd5e1; border-radius: 9px; padding: .65rem .75rem; cursor: pointer; background: #fff; }
 .schedule-days label.selected { border-color: #2563eb; color: #1d4ed8; background: #eff6ff; }
 .schedule-days input { width: auto; margin: 0; }
 .schedule-add-row { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; }
@@ -1498,7 +1549,7 @@ body {
 .schedule-assigned { display: grid; gap: .45rem; margin-top: .8rem; padding-top: .75rem; border-top: 1px solid #e2e8f0; }
 .schedule-assigned-group { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; padding: .5rem; background: #f8fafc; border-radius: 8px; }
 .schedule-assigned-group span { font-weight: 600; margin-right: auto; }
-.schedule-assigned-group button { border: 0; border-radius: 6px; padding: .3rem .5rem; color: #475569; background: #e2e8f0; cursor: pointer; }
+.schedule-assigned-group button { border: 0; border-radius: 6px; padding: .45rem .7rem; color: #991b1b; background: #fee2e2; cursor: pointer; font-weight: 600; }
 .schedule-display p { margin: .35rem 0; }
 .category-choice { display: flex; align-items: center; gap: .5rem; }
 .category-choice input { width: auto; }
@@ -1512,6 +1563,9 @@ body {
   .proveedor-resumen {
     align-items: flex-start;
   }
+
+  .purchase-contact-grid { grid-template-columns: 1fr; }
+  .purchase-contact-full { grid-column: auto; }
 }
 
 @media (max-width: 480px) {

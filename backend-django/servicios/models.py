@@ -16,6 +16,25 @@ class Compras(models.Model):
     id_proveedor = models.ForeignKey('Proveedores', models.PROTECT, db_column='id_proveedor')
     id_estado = models.ForeignKey('EstadosCompra', models.DO_NOTHING, db_column='id_estado')
     id_usuario = models.ForeignKey(settings.AUTH_USER_MODEL, models.DO_NOTHING, db_column='id_usuario')
+    fecha_entrega_requerida = models.DateField(blank=True, null=True)
+    lugar_entrega = models.CharField(max_length=250, default='')
+    proveedor_nombre_comercial = models.CharField(max_length=150, blank=True, default='')
+    proveedor_razon_social = models.CharField(max_length=180, blank=True, default='')
+    proveedor_ruc = models.CharField(max_length=11, blank=True, default='')
+    proveedor_correo = models.EmailField(max_length=254, blank=True, default='')
+    proveedor_telefono = models.CharField(max_length=30, blank=True, default='')
+    contacto_proveedor_nombre = models.CharField(max_length=150, blank=True, default='')
+    contacto_proveedor_cargo = models.CharField(max_length=120, blank=True, default='')
+    contacto_proveedor_telefono = models.CharField(max_length=30, blank=True, default='')
+    contacto_proveedor_correo = models.EmailField(max_length=254, blank=True, default='')
+    observaciones = models.TextField(blank=True, default='')
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    igv_porcentaje = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
+    igv_monto = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    datos_empresa = models.JSONField(default=dict)
+    responsable_nombre = models.CharField(max_length=180, blank=True, default='')
+    responsable_rol = models.CharField(max_length=80, blank=True, default='')
 
     class Meta:
         managed = True
@@ -25,6 +44,7 @@ class Compras(models.Model):
 class DetalleCompras(models.Model):
     id_compra = models.ForeignKey(Compras, models.DO_NOTHING, db_column='id_compra')
     id_producto = models.ForeignKey('Productos', models.DO_NOTHING, db_column='id_producto')
+    nombre_producto_snapshot = models.CharField(max_length=120, blank=True, default='')
     cantidad = models.DecimalField(max_digits=12, decimal_places=3)
     precio_unitario = models.DecimalField(max_digits=12, decimal_places=2)
 
@@ -264,6 +284,18 @@ class DatosContactoProveedor(models.Model):
         constraints = [models.UniqueConstraint(fields=['contacto', 'tipo', 'valor'], name='uq_dato_contacto_tipo_valor')]
 
 
+class DatosProveedor(models.Model):
+    TIPOS = [('telefono', 'Teléfono'), ('correo', 'Correo')]
+    proveedor = models.ForeignKey(Proveedores, on_delete=models.CASCADE, db_column='id_proveedor', related_name='datos_contacto')
+    tipo = models.CharField(max_length=10, choices=TIPOS)
+    valor = models.CharField(max_length=254)
+
+    class Meta:
+        managed = True
+        db_table = 'datos_proveedor'
+        constraints = [models.UniqueConstraint(fields=['proveedor', 'tipo', 'valor'], name='uq_dato_tipo_valor_proveedor')]
+
+
 class HorariosContacto(models.Model):
     DIAS = [
         (0, 'Lunes'),
@@ -330,3 +362,36 @@ class Ventas(models.Model):
     class Meta:
         managed = True
         db_table = 'ventas'
+
+
+class EmpresaCompradora(models.Model):
+    razon_social = models.CharField(max_length=180)
+    nombre_comercial = models.CharField(max_length=150)
+    ruc = models.CharField(max_length=11)
+    domicilio_fiscal = models.CharField(max_length=250)
+    telefono = models.CharField(max_length=30)
+    correo_electronico = models.EmailField(max_length=254)
+
+    class Meta:
+        managed = True
+        db_table = "empresa_compradora"
+
+    def __str__(self):
+        return self.nombre_comercial
+
+
+class ConfiguracionTributaria(models.Model):
+    empresa = models.ForeignKey(EmpresaCompradora, on_delete=models.CASCADE, related_name='configuraciones_tributarias')
+    codigo = models.CharField(max_length=10)
+    nombre = models.CharField(max_length=80)
+    porcentaje = models.DecimalField(max_digits=5, decimal_places=2)
+    vigente_desde = models.DateField()
+    activo = models.BooleanField(default=True)
+
+    class Meta:
+        managed = True
+        db_table = 'configuracion_tributaria'
+        constraints = [
+            models.UniqueConstraint(fields=['empresa', 'codigo', 'vigente_desde'], name='uq_empresa_impuesto_vigencia'),
+            models.CheckConstraint(condition=models.Q(porcentaje__gte=0, porcentaje__lte=100), name='chk_config_tributaria_porcentaje'),
+        ]

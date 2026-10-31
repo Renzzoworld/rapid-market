@@ -1,18 +1,34 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { mapearCompra, mapearProducto } from "../../compartido/servicios/adaptadoresApi.js";
 import { useConsultaPaginada } from "../../compartido/hooks/useConsultaPaginada.js";
 import { useBusquedaProductos } from "../../compartido/hooks/useBusquedaProductos.js";
 
-const compraInicial = { proveedor: "", productoId: "", cantidad: 1, precioUnitario: "" };
-const obtenerLotesCompra = (purchase) => purchase.lotes || [{ idLote: Number(String(purchase.idCompra ?? purchase.id).replace("CPA-", "")), fecha: purchase.fecha, producto: purchase.producto, cantidad: purchase.cantidad, precioUnitario: purchase.costo / purchase.cantidad, subtotal: purchase.costo, perecible: false, fechaVencimiento: "" }];
+const compraInicial = {
+  proveedor: "", providerId: "", providerEmailId: "", providerPhoneId: "", contactId: "",
+  fechaEntregaRequerida: "", lugarEntrega: "", observaciones: "",
+  productoId: "", cantidad: 1, precioUnitario: "",
+};
+const obtenerLotesCompra = (purchase) => purchase.lotes || [{
+  idLote: Number(String(purchase.idCompra ?? purchase.id).replace("OC-", "").replace("CPA-", "")),
+  fecha: purchase.fecha, producto: purchase.producto, cantidad: purchase.cantidad,
+  precioUnitario: purchase.costo / purchase.cantidad, subtotal: purchase.costo,
+  perecible: false, fechaVencimiento: "",
+}];
+const redondearDinero = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
 
-export function useCompras({ apiRequest, logueado, seccion, esAdministrador, revisionProductos, invalidarInventario, cargarDatos, accessToken, catalogos, setCatalogos, proveedores, setProveedores, resumenDashboard, totalCompras }) {
+export function useCompras({ apiRequest, apiDownload, logueado, seccion, esAdministrador, revisionProductos, invalidarInventario, cargarDatos, accessToken, catalogos, setCatalogos, proveedores, setProveedores, resumenDashboard, totalCompras }) {
   const [busquedaCompras, setBusquedaCompras] = useState("");
   const [revision, setRevision] = useState(0);
   const [mostrarCompra, setMostrarCompra] = useState(false);
   const [cargandoProveedores, setCargandoProveedores] = useState(false);
+  const [cargandoDetalleProveedorCompra, setCargandoDetalleProveedorCompra] = useState(false);
   const [errorProveedores, setErrorProveedores] = useState("");
+  const [proveedorCompraDetalle, setProveedorCompraDetalle] = useState(null);
+  const [ordenCompraDefaults, setOrdenCompraDefaults] = useState(null);
   const [compraSeleccionada, setCompraSeleccionada] = useState(null);
+  const [ordenCompraPdf, setOrdenCompraPdf] = useState(null);
+  const [cargandoOrdenCompraPdf, setCargandoOrdenCompraPdf] = useState(false);
+  const ordenCompraPdfUrl = useRef(null);
   const [compraVerificando, setCompraVerificando] = useState(null);
   const [compraCancelando, setCompraCancelando] = useState(null);
   const [fechasVencimiento, setFechasVencimiento] = useState({});
@@ -22,27 +38,34 @@ export function useCompras({ apiRequest, logueado, seccion, esAdministrador, rev
   const [carritoCompra, setCarritoCompra] = useState([]);
   const historial = useConsultaPaginada({
     apiRequest, ruta: "/purchases/",
-    habilitada: logueado && seccion === "compras" && esAdministrador, busqueda: busquedaCompras, revision, mapear: mapearCompra,
+    habilitada: logueado && seccion === "compras" && esAdministrador,
+    busqueda: busquedaCompras, revision, mapear: mapearCompra,
   });
+
   const cargarProveedores = async () => {
     if (!logueado || !esAdministrador) return;
     setCargandoProveedores(true);
     setErrorProveedores("");
     try {
-      const referencias = await apiRequest("/references/");
-        setCatalogos((actuales) => ({ ...actuales, ...referencias }));
-        setProveedores(referencias.providers);
+      const [referencias, defaults] = await Promise.all([
+        apiRequest("/references/"),
+        apiRequest("/purchases/order-defaults/"),
+      ]);
+      setCatalogos((actuales) => ({ ...actuales, ...referencias }));
+      setProveedores(referencias.providers);
+      setOrdenCompraDefaults(defaults);
     } catch (error) {
       setErrorProveedores(error.message);
     } finally {
       setCargandoProveedores(false);
     }
   };
+
   const productos = useBusquedaProductos({
     apiRequest, habilitada: logueado && mostrarCompra, busqueda: busquedaProductoCompra,
     revision: revisionProductos, mapear: mapearProducto,
-    categoryIds: nuevaCompra.proveedor
-      ? (catalogos.providers?.find((provider) => provider.name === nuevaCompra.proveedor)?.category_ids || [-1])
+    categoryIds: nuevaCompra.providerId
+      ? (catalogos.providers?.find((provider) => provider.id === Number(nuevaCompra.providerId))?.category_ids || [-1])
       : [],
   });
   const actualizarBusquedaProductoCompra = (value) => {
@@ -53,24 +76,90 @@ export function useCompras({ apiRequest, logueado, seccion, esAdministrador, rev
     setMostrarCompra(value);
     if (!value) productos.limpiar();
   };
+  const abrirNuevaCompra = async () => {
+    let defaults = ordenCompraDefaults;
+    if (!defaults) {
+      try {
+        defaults = await apiRequest("/purchases/order-defaults/");
+        setOrdenCompraDefaults(defaults);
+      } catch (error) {
+        alert(error.message);
+        return;
+      }
+    }
+    setBusquedaProveedorCompra("");
+    setBusquedaProductoCompra("");
+    setProveedorCompraDetalle(null);
+    setCarritoCompra([]);
+    setNuevaCompra({ ...compraInicial, lugarEntrega: defaults.company?.domicilio_fiscal || "" });
+    setMostrarCompra(true);
+  };
+  const cerrarNuevaCompra = () => {
+    cambiarMostrarCompra(false);
+    setNuevaCompra(compraInicial);
+    setBusquedaProveedorCompra("");
+    setBusquedaProductoCompra("");
+    setProveedorCompraDetalle(null);
+    setCarritoCompra([]);
+  };
+  const seleccionarProveedorCompra = async (provider) => {
+    setBusquedaProveedorCompra(provider.name);
+    setProveedorCompraDetalle(null);
+    setCargandoDetalleProveedorCompra(true);
+    setNuevaCompra({
+      ...compraInicial,
+      proveedor: provider.name,
+      providerId: provider.id,
+      lugarEntrega: ordenCompraDefaults?.company?.domicilio_fiscal || "",
+    });
+    setBusquedaProductoCompra("");
+    productos.limpiar();
+    try {
+      const detail = await apiRequest(`/providers/manage/${provider.id}/`);
+      setProveedorCompraDetalle(detail);
+      const supplierEmails = (detail.datos_contacto || []).filter((item) => item.tipo === "correo");
+      const supplierPhones = (detail.datos_contacto || []).filter((item) => item.tipo === "telefono");
+      setNuevaCompra((current) => ({
+        ...current,
+        providerEmailId: supplierEmails[0]?.id || "",
+        providerPhoneId: supplierPhones[0]?.id || "",
+      }));
+    } catch (error) {
+      setErrorProveedores(error.message);
+    } finally {
+      setCargandoDetalleProveedorCompra(false);
+    }
+  };
   const agregarProductoCompra = () => {
     const product = productos.registros.find((item) => item.id === Number(nuevaCompra.productoId));
     const quantity = Number(nuevaCompra.cantidad);
     const unitPrice = Number(nuevaCompra.precioUnitario);
     if (!product) { alert("Selecciona un producto."); return; }
-    if (quantity <= 0 || unitPrice <= 0) { alert("Cantidad y precio unitario deben ser mayores que 0."); return; }
+    if (quantity <= 0 || unitPrice <= 0) { alert("Cantidad y precio unitario sin IGV deben ser mayores que 0."); return; }
     setCarritoCompra([...carritoCompra, { id: product.id, nombre: product.nombre, cantidad: quantity, precioUnitario: unitPrice, perecible: product.perecible }]);
     setNuevaCompra({ ...nuevaCompra, productoId: "", cantidad: 1, precioUnitario: "" });
     actualizarBusquedaProductoCompra("");
   };
-  const cambiarCantidadProductoCompra = (index, change) => setCarritoCompra(carritoCompra.map((item, itemIndex) => itemIndex === index ? { ...item, cantidad: Math.max(1, item.cantidad + change) } : item));
+  const subtotalCarritoCompra = redondearDinero(carritoCompra.reduce((sum, item) => sum + redondearDinero(item.precioUnitario * item.cantidad), 0));
+  const porcentajeIgvCompra = Number(ordenCompraDefaults?.igv_rate || 0);
+  const igvCarritoCompra = redondearDinero(subtotalCarritoCompra * porcentajeIgvCompra / 100);
+  const totalCarritoCompra = redondearDinero(subtotalCarritoCompra + igvCarritoCompra);
+
   const registrarCompra = async (event) => {
     event.preventDefault();
-    const provider = catalogos.providers.find((item) => item.name === nuevaCompra.proveedor);
-    if (!provider || !carritoCompra.length) { alert("Selecciona un proveedor y agrega productos."); return; }
+    const selectedProvider = catalogos.providers?.find((item) => item.id === Number(nuevaCompra.providerId));
+    if (!selectedProvider || !carritoCompra.length) { alert("Selecciona un proveedor y agrega productos."); return; }
+    if (!nuevaCompra.providerEmailId || !nuevaCompra.providerPhoneId) { alert("Selecciona un correo y teléfono del proveedor."); return; }
+    if (!nuevaCompra.fechaEntregaRequerida || !nuevaCompra.lugarEntrega.trim()) { alert("Indica la fecha y el lugar de entrega."); return; }
     try {
       await apiRequest("/purchases/", { method: "POST", body: JSON.stringify({
-        provider_id: provider.id,
+        provider_id: Number(nuevaCompra.providerId),
+        provider_email_id: Number(nuevaCompra.providerEmailId),
+        provider_phone_id: Number(nuevaCompra.providerPhoneId),
+        contact_id: nuevaCompra.contactId ? Number(nuevaCompra.contactId) : null,
+        requested_delivery_date: nuevaCompra.fechaEntregaRequerida,
+        delivery_address: nuevaCompra.lugarEntrega.trim(),
+        observations: nuevaCompra.observaciones.trim(),
         items: carritoCompra.map((item) => ({ product_id: item.id, quantity: item.cantidad, unit_price: item.precioUnitario })),
       }) });
       await cargarDatos(accessToken);
@@ -78,11 +167,31 @@ export function useCompras({ apiRequest, logueado, seccion, esAdministrador, rev
       historial.setPagina(1);
       setRevision((value) => value + 1);
       invalidarInventario();
-      setCarritoCompra([]);
-      cambiarMostrarCompra(false);
-      setNuevaCompra(compraInicial);
+      cerrarNuevaCompra();
     } catch (error) { alert(error.message); }
   };
+  const verOrdenCompraPDF = async (purchase) => {
+    setCargandoOrdenCompraPdf(true);
+    try {
+      const blob = await apiDownload(`/purchases/${purchase.idCompra}/order-pdf/`);
+      const url = URL.createObjectURL(blob);
+      if (ordenCompraPdfUrl.current) URL.revokeObjectURL(ordenCompraPdfUrl.current);
+      ordenCompraPdfUrl.current = url;
+      setOrdenCompraPdf({
+        url,
+        filename: `OC-${String(purchase.idCompra).padStart(6, "0")}.pdf`,
+      });
+    } catch (error) { alert(error.message); }
+    finally { setCargandoOrdenCompraPdf(false); }
+  };
+  const cerrarVistaPreviaOrden = () => {
+    if (ordenCompraPdfUrl.current) URL.revokeObjectURL(ordenCompraPdfUrl.current);
+    ordenCompraPdfUrl.current = null;
+    setOrdenCompraPdf(null);
+  };
+  useEffect(() => () => {
+    if (ordenCompraPdfUrl.current) URL.revokeObjectURL(ordenCompraPdfUrl.current);
+  }, []);
   const validarCompra = async () => {
     if (!compraVerificando) return;
     const expiries = {};
@@ -116,27 +225,30 @@ export function useCompras({ apiRequest, logueado, seccion, esAdministrador, rev
   return {
     estado: {
       agregarProductoCompra, busquedaCompras, busquedaProductoCompra, busquedaProveedorCompra,
-      calcularTotalCompra: (purchase) => obtenerLotesCompra(purchase).reduce((total, lot) => total + lot.precioUnitario * lot.cantidad, 0),
-      cambiarCantidadProductoCompra, cancelarCompra, cargandoCompras: historial.cargando,
-      cargandoProductosCompra: productos.cargando, carritoCompra, compraCancelando,
-      compraSeleccionada, compraVerificando, compras: historial.registros,
-      comprasFiltradas: historial.registros, errorCompras: historial.error, esAdministrador,
-      cargarProveedores, cargandoProveedores, errorProveedores, fechasVencimiento, mostrarCompra, nuevaCompra,
-      obtenerCodigoCompra: (purchase) => `CPA-${purchase.idCompra ?? Number(String(purchase.id).replace("CPA-", ""))}`,
+      calcularTotalCompra: (purchase) => Number(purchase.total ?? obtenerLotesCompra(purchase).reduce((total, lot) => total + lot.precioUnitario * lot.cantidad, 0)),
+      cambiarCantidadProductoCompra: (index, change) => setCarritoCompra((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, cantidad: Math.max(1, item.cantidad + change) } : item)),
+      cancelarCompra, cargandoCompras: historial.cargando, cargandoDetalleProveedorCompra,
+      cargandoProductosCompra: productos.cargando, cargandoProveedores, carritoCompra, compraCancelando,
+      compraSeleccionada, compraVerificando, ordenCompraPdf, cargandoOrdenCompraPdf,
+      compras: historial.registros, comprasFiltradas: historial.registros,
+      errorCompras: historial.error, esAdministrador, cargarProveedores, errorProveedores, fechasVencimiento,
+      mostrarCompra, nuevaCompra, ordenCompraDefaults, proveedorCompraDetalle, setProveedorCompraDetalle,
+      obtenerCodigoCompra: (purchase) => `OC-${String(purchase.idCompra ?? Number(String(purchase.id).replace(/^(OC|CPA)-/, ""))).padStart(6, "0")}`,
       obtenerCodigoLote: (lot) => `LT-${lot.idLote ?? Number(String(lot.id).replace("LT-", ""))}`,
       obtenerEstadoCompra: (purchase) => purchase.estado || "Pendiente de entrega",
       obtenerLotesCompra, paginaCompras: historial.pagina, paginaProductosCompra: productos.pagina,
       productoSeleccionadoCompra: productOptions.find((item) => item.id === Number(nuevaCompra.productoId)),
       productosCompraFiltrados: productOptions, proveedores,
       proveedoresFiltrados: proveedores.filter((provider) => provider.name.toLowerCase().includes(busquedaProveedorCompra.toLowerCase())),
-      registrarCompra, resumenDashboard, seccion, setBusquedaCompras,
+      registrarCompra, verOrdenCompraPDF, cerrarVistaPreviaOrden, abrirNuevaCompra, cerrarNuevaCompra, seleccionarProveedorCompra,
+      resumenDashboard, seccion, setBusquedaCompras,
       setBusquedaProductoCompra: actualizarBusquedaProductoCompra, setMostrarCompra: cambiarMostrarCompra,
       setBusquedaProveedorCompra, setCarritoCompra, setCompraCancelando, setCompraSeleccionada,
-      setCompraVerificando, setFechasVencimiento,
-      setNuevaCompra, setPaginaCompras: historial.setPagina,
+      setCompraVerificando, setFechasVencimiento, setNuevaCompra, setPaginaCompras: historial.setPagina,
       setPaginaProductosCompra: productos.setPagina, setProductosCompraOpciones: productos.setRegistros,
       setTotalProductosCompraOpciones: productos.setTotal,
-      totalCarritoCompra: carritoCompra.reduce((total, item) => total + item.precioUnitario * item.cantidad, 0),
+      totalCarritoCompra: subtotalCarritoCompra, subtotalCarritoCompra, porcentajeIgvCompra,
+      igvCarritoCompra, totalFinalCompra: totalCarritoCompra,
       totalCompras, totalComprasRegistros: historial.total,
       totalProductosCompraOpciones: productos.total, validarCompra,
     },

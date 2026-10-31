@@ -14,12 +14,12 @@ from ...compartido.api_base import AdminWriteMixin
 from ...compartido.serializers import ActualizarProveedorSerializer, ProveedorSerializer
 from ...models import (
     CanalesProveedor, CargosProveedor, CategoriasProductos, Compras,
-    ContactosProveedor, DepartamentosProveedor, HorariosProveedor,
+    ContactosProveedor, DatosProveedor, DepartamentosProveedor, HorariosProveedor,
     Proveedores, RedesSociales,
 )
 from .serializers_relacionados import (
     CanalProveedorSerializer, ContactoProveedorSerializer,
-    HorarioProveedorSerializer,
+    DatosProveedorSerializer, HorarioProveedorSerializer,
 )
 from ...compartido.validacion import pagination_params
 
@@ -34,6 +34,7 @@ def proveedor_como_json(proveedor, incluir_relaciones=False):
         'horarios': list(proveedor.horarios.order_by('dia_semana', 'hora_inicio').values('dia_semana', 'hora_inicio', 'hora_fin')),
     }
     if incluir_relaciones:
+        data['datos_contacto'] = DatosProveedorSerializer(proveedor.datos_contacto.order_by('tipo', 'valor'), many=True).data
         data['contacts'] = ContactoProveedorSerializer(proveedor.contactos.select_related('cargo').prefetch_related('horarios', 'datos_contacto').order_by('nombre'), many=True).data
         data['channels'] = CanalProveedorSerializer(proveedor.canales.select_related('departamento', 'red_social').order_by('medio', 'valor'), many=True).data
     return data
@@ -88,6 +89,12 @@ class ProvidersManagementView(AdminWriteMixin, APIView):
         values = dict(serializer.validated_data)
         categories = validar_categorias(values.pop('categorias'))
         hours = validar_horarios(values.pop('horarios'))
+        contact_data = DatosProveedorSerializer(data=values.pop('datos_contacto'), many=True)
+        contact_data.is_valid(raise_exception=True)
+        contact_rows = contact_data.validated_data
+        tipos_contacto = {item['tipo'] for item in contact_rows}
+        if not {'telefono', 'correo'}.issubset(tipos_contacto):
+            raise ValidationError({'datos_contacto': 'Agrega al menos un teléfono y un correo electrónico.'})
         image = values.pop('logo_file', None)
         logo = guardar_logo(image) if image else ''
         try:
@@ -98,6 +105,7 @@ class ProvidersManagementView(AdminWriteMixin, APIView):
             )
             proveedor.categorias.set(categories)
             HorariosProveedor.objects.bulk_create([HorariosProveedor(proveedor=proveedor, **h) for h in hours])
+            DatosProveedor.objects.bulk_create([DatosProveedor(proveedor=proveedor, **item) for item in contact_rows])
         except IntegrityError as error:
             if logo:
                 default_storage.delete(logo)
@@ -119,6 +127,14 @@ class ProviderDetailView(AdminWriteMixin, APIView):
         values = dict(serializer.validated_data)
         categories = validar_categorias(values.pop('categorias')) if 'categorias' in values else None
         hours = validar_horarios(values.pop('horarios')) if 'horarios' in values else None
+        contact_rows = None
+        if 'datos_contacto' in values:
+            contact_data = DatosProveedorSerializer(data=values.pop('datos_contacto'), many=True)
+            contact_data.is_valid(raise_exception=True)
+            contact_rows = contact_data.validated_data
+            tipos_contacto = {item['tipo'] for item in contact_rows}
+            if not {'telefono', 'correo'}.issubset(tipos_contacto):
+                raise ValidationError({'datos_contacto': 'Agrega al menos un teléfono y un correo electrónico.'})
         image = values.pop('logo_file', None)
         old_logo = proveedor.logo
         new_logo = guardar_logo(image) if image else None
@@ -134,6 +150,9 @@ class ProviderDetailView(AdminWriteMixin, APIView):
             if hours is not None:
                 proveedor.horarios.all().delete()
                 HorariosProveedor.objects.bulk_create([HorariosProveedor(proveedor=proveedor, **h) for h in hours])
+            if contact_rows is not None:
+                proveedor.datos_contacto.all().delete()
+                DatosProveedor.objects.bulk_create([DatosProveedor(proveedor=proveedor, **item) for item in contact_rows])
         except IntegrityError as error:
             if new_logo:
                 default_storage.delete(new_logo)

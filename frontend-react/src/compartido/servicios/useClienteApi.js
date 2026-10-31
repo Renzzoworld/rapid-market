@@ -45,5 +45,26 @@ export function useClienteApi({ accessToken, refreshToken, onTokensRenovados }) 
     return leerRespuesta(response);
   }, [accessToken, onTokensRenovados, refreshToken, requestPublic]);
 
-  return { apiRequest, requestPublic };
+  const apiDownload = useCallback(async (path, token = accessToken) => {
+    let response = await fetch(`${API_URL}${path}`, opcionesConToken({}, token));
+    if (response.status === 401 && refreshToken && path !== "/login/refresh/") {
+      try {
+        const tokens = await requestPublic("/login/refresh/", {
+          method: "POST", body: JSON.stringify({ refresh: refreshToken }),
+        });
+        onTokensRenovados(tokens);
+        response = await fetch(`${API_URL}${path}`, opcionesConToken({}, tokens.access));
+      } catch {
+        // Preserve the original response if token refresh fails.
+      }
+    }
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      const detail = data.detail || Object.values(data).flat().join(" ") || "No se pudo descargar el archivo.";
+      throw new Error(detail);
+    }
+    return response.blob();
+  }, [accessToken, onTokensRenovados, refreshToken, requestPublic]);
+
+  return { apiRequest, apiDownload, requestPublic };
 }
