@@ -72,7 +72,13 @@ def purchase_lines(purchase_id):
 
 def deliver_lot(detail_id, quantity, expiry):
     with connection.cursor() as cursor:
-        cursor.execute("UPDATE lotes SET cantidad_actual=%s,fecha_vencimiento=%s WHERE id_detalle_compra=%s", [quantity, expiry, detail_id])
+        cursor.execute("UPDATE lotes SET cantidad_actual=%s,fecha_vencimiento=%s WHERE id_detalle_compra=%s RETURNING id", [quantity, expiry, detail_id])
+        if cursor.fetchone() is None:
+            # Las compras antiguas pueden tener detalle pero carecer de lote.
+            cursor.execute(
+                "INSERT INTO lotes (id_detalle_compra,cantidad_inicial,cantidad_actual,fecha_vencimiento) VALUES (%s,%s,%s,%s)",
+                [detail_id, quantity, quantity, expiry],
+            )
 
 
 def purchase_state_id(state_name):

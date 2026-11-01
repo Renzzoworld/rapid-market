@@ -302,7 +302,7 @@ export function DetalleCompra() {
 }
 export function VerificarCompra() {
   const { estadoCompras } = useContextoAplicacion();
-  const { compraVerificando, recepcionProductos, observacionesRecepcion, guardandoRecepcion, actualizarRecepcionProducto, cancelarRecepcion, obtenerCodigoCompra, obtenerCodigoLote, obtenerLotesCompra, registrarRecepcion, setObservacionesRecepcion } = estadoCompras;
+  const { compraVerificando, recepcionProductos, observacionesRecepcion, errorRecepcion, confirmacionRecepcion, guardandoRecepcion, actualizarRecepcionProducto, cancelarRecepcion, obtenerCodigoCompra, obtenerCodigoLote, obtenerLotesCompra, registrarRecepcion, cancelarConfirmacionRecepcion, setObservacionesRecepcion } = estadoCompras;
 
   return (
     <>
@@ -325,6 +325,8 @@ export function VerificarCompra() {
             </div>
 
             <p className="receipt-instructions">Revisa cada producto y registra la cantidad recibida. Si un producto está dañado, vencido o no corresponde, marca “Rechazar esta entrega”. En ese caso se rechazará toda la orden y no ingresará ningún producto al inventario.</p>
+            {errorRecepcion && <p className="field-error" role="alert">{errorRecepcion}</p>}
+            {confirmacionRecepcion && <p className="receipt-confirmation" role="status">{confirmacionRecepcion}</p>}
             <div className="table-container purchase-receipt-table">
               <table>
                 <thead><tr><th>Producto / lote</th><th>Solicitado</th><th>Recibido</th><th>Resultado</th><th>Vencimiento</th></tr></thead>
@@ -347,7 +349,8 @@ export function VerificarCompra() {
             <label className="receipt-observations">Observaciones de recepción (opcional)<textarea rows="3" maxLength="2000" value={observacionesRecepcion} onChange={(event) => setObservacionesRecepcion(event.target.value)} placeholder="Anotaciones sobre la entrega" /></label>
             <div className="modal-actions verification-actions">
               <button type="button" className="secondary-button" onClick={cancelarRecepcion}>Cerrar</button>
-              <button type="button" className="primary-button" disabled={guardandoRecepcion} onClick={registrarRecepcion}>{guardandoRecepcion ? "Guardando revisión..." : "Registrar revisión"}</button>
+              {confirmacionRecepcion && <button type="button" className="secondary-button" disabled={guardandoRecepcion} onClick={cancelarConfirmacionRecepcion}>Volver a revisar</button>}
+              <button type="button" className="primary-button" disabled={guardandoRecepcion} onClick={registrarRecepcion}>{guardandoRecepcion ? "Guardando revisión..." : confirmacionRecepcion ? "Confirmar recepción" : "Registrar revisión"}</button>
             </div>
           </div>
         </div>

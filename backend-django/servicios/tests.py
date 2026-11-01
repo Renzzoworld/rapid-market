@@ -1,5 +1,7 @@
 from types import SimpleNamespace
+from unittest import TestCase as UnitTestCase
 from unittest.mock import patch, Mock
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -12,12 +14,17 @@ from rest_framework.response import Response
 from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
 from servicios.permissions import IsAdministrator
+from servicios.models import (
+    CategoriasProductos, Compras, DetalleCompras, EstadosCompra,
+    Lotes, Productos, Proveedores, UnidadesMedida,
+)
 from servicios.modulos.autenticacion.vistas import LoginView
 from servicios.modulos.compras.vistas import PurchasesView
 from servicios.modulos.inventario.vistas import ProductDetailView, ProductListView
 from servicios.modulos.resumen.vistas import DashboardView
 from servicios.modulos.ventas.vistas import SalesView
 from servicios.modulos.inventario.repositorio import list_product_page
+from servicios.modulos.compras.repositorio import deliver_lot
 
 
 class APIIndexTests(SimpleTestCase):
@@ -208,6 +215,19 @@ class ProductPaginationTests(SimpleTestCase):
         list_lots.assert_called_once_with(5)
 
 
+class LegacyPurchaseReceiptTests(UnitTestCase):
+    def test_receiving_existing_purchase_creates_a_missing_lot(self):
+        with patch("servicios.modulos.compras.repositorio.connection.cursor") as cursor_factory:
+            cursor = cursor_factory.return_value.__enter__.return_value
+            cursor.fetchone.return_value = None
+
+            deliver_lot(42, Decimal("3.000"), None)
+
+            self.assertEqual(cursor.execute.call_count, 2)
+            self.assertIn("UPDATE lotes", cursor.execute.call_args_list[0].args[0])
+            self.assertIn("INSERT INTO lotes", cursor.execute.call_args_list[1].args[0])
+            self.assertEqual(cursor.execute.call_args_list[1].args[1], [42, Decimal("3.000"), Decimal("3.000"), None])
+
 class DjangoBusinessIntegrationTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -228,6 +248,38 @@ class DjangoBusinessIntegrationTests(TestCase):
         response = self.client.post(path, payload, format="json")
         self.assertEqual(response.status_code, status, response.data)
         return response.data
+
+    def test_receives_existing_purchase_when_its_lot_is_missing(self):
+        category = CategoriasProductos.objects.first()
+        provider = Proveedores.objects.create(
+            razon_social="Proveedor legado", nombre="Proveedor legado",
+            ruc="20999123456", direccion="Dirección de prueba",
+        )
+        provider.categorias.add(category)
+        product = Productos.objects.create(
+            nombre="Producto legado", id_unidad=UnidadesMedida.objects.first(),
+            precio_venta="8.00", categoria=category,
+        )
+        purchase = Compras.objects.create(
+            id_proveedor=provider, id_estado=EstadosCompra.objects.get(nombre="Pendiente"),
+            id_usuario=self.admin,
+        )
+        detail = DetalleCompras.objects.create(
+            id_compra=purchase, id_producto=product,
+            nombre_producto_snapshot=product.nombre, cantidad="3.000", precio_unitario="4.00",
+        )
+        self.authenticate(self.admin)
+
+        result = self.post(f"/api/purchases/{purchase.pk}/receive/", {
+            "observations": "Recepción de una orden existente",
+            "items": [{
+                "detail_id": detail.pk, "received_quantity": "3.000",
+                "conforme": True, "motivo_rechazo": "", "expiry_date": None,
+            }],
+        }, status=200)
+
+        self.assertEqual(result["state"], "Recibido")
+        self.assertEqual(Lotes.objects.get(id_detalle_compra=detail).cantidad_actual, Decimal("3.000"))
 
     def test_purchase_delivery_sale_and_expense_reference_django_accounts(self):
         self.authenticate(self.admin)

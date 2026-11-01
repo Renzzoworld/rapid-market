@@ -1459,6 +1459,7 @@ body {
 .purchase-details-modal { max-height: 92vh; overflow-y: auto; }
 .purchase-verification-modal { max-width: 1100px; max-height: 92vh; overflow-y: auto; }
 .receipt-instructions { padding: .85rem 1rem; border: 1px solid #bfdbfe; border-radius: 8px; background: #eff6ff; color: #1e3a5f; line-height: 1.5; }
+.receipt-confirmation { padding: .85rem 1rem; border: 1px solid #fbbf24; border-radius: 8px; background: #fffbeb; color: #78350f; line-height: 1.5; }
 .purchase-receipt-table { margin-top: 1rem; max-height: 45vh; overflow: auto; }
 .purchase-receipt-table table, .purchase-record-table table { width: 100%; border-collapse: collapse; }
 .purchase-receipt-table th, .purchase-receipt-table td, .purchase-record-table th, .purchase-record-table td { padding: .7rem; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: top; }

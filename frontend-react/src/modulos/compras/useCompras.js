@@ -15,6 +15,10 @@ const obtenerLotesCompra = (purchase) => purchase.lotes || [{
   perecible: false, fechaVencimiento: "",
 }];
 const redondearDinero = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
+const fechaHoyLocal = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+};
 
 export function useCompras({ apiRequest, apiDownload, logueado, seccion, esAdministrador, revisionProductos, invalidarInventario, cargarDatos, accessToken, catalogos, setCatalogos, proveedores, setProveedores, resumenDashboard, totalCompras }) {
   const [busquedaCompras, setBusquedaCompras] = useState("");
@@ -32,6 +36,8 @@ export function useCompras({ apiRequest, apiDownload, logueado, seccion, esAdmin
   const [compraVerificando, setCompraVerificando] = useState(null);
   const [recepcionProductos, setRecepcionProductos] = useState([]);
   const [observacionesRecepcion, setObservacionesRecepcion] = useState("");
+  const [errorRecepcion, setErrorRecepcion] = useState("");
+  const [confirmacionRecepcion, setConfirmacionRecepcion] = useState("");
   const [guardandoRecepcion, setGuardandoRecepcion] = useState(false);
   const [nuevaCompra, setNuevaCompra] = useState(compraInicial);
   const [busquedaProveedorCompra, setBusquedaProveedorCompra] = useState("");
@@ -196,6 +202,8 @@ export function useCompras({ apiRequest, apiDownload, logueado, seccion, esAdmin
   const prepararRecepcionCompra = (purchase) => {
     setCompraVerificando(purchase);
     setObservacionesRecepcion("");
+    setErrorRecepcion("");
+    setConfirmacionRecepcion("");
     setRecepcionProductos(obtenerLotesCompra(purchase).map((lot) => ({
       detailId: lot.idDetalle,
       receivedQuantity: "",
@@ -205,22 +213,27 @@ export function useCompras({ apiRequest, apiDownload, logueado, seccion, esAdmin
     })));
   };
   const actualizarRecepcionProducto = (detailId, changes) => {
+    setErrorRecepcion("");
+    setConfirmacionRecepcion("");
     setRecepcionProductos((items) => items.map((item) => item.detailId === detailId ? { ...item, ...changes } : item));
   };
   const cancelarRecepcion = () => {
     setCompraVerificando(null);
     setRecepcionProductos([]);
     setObservacionesRecepcion("");
+    setErrorRecepcion("");
+    setConfirmacionRecepcion("");
   };
+  const cancelarConfirmacionRecepcion = () => setConfirmacionRecepcion("");
   const registrarRecepcion = async () => {
     if (!compraVerificando) return;
     const lots = obtenerLotesCompra(compraVerificando);
     for (const lot of lots) {
       const receipt = recepcionProductos.find((item) => item.detailId === lot.idDetalle);
-      if (!receipt || receipt.receivedQuantity === "" || !receipt.conforme) { alert("Completa la cantidad recibida y el estado de cada producto."); return; }
-      if (receipt.conforme === "false" && !receipt.motivoRechazo.trim()) { alert(`Indica el motivo de rechazo de ${lot.producto}.`); return; }
+      if (!receipt || receipt.receivedQuantity === "" || !receipt.conforme) { setErrorRecepcion("Completa la cantidad recibida y el estado de cada producto."); return; }
+      if (receipt.conforme === "false" && !receipt.motivoRechazo.trim()) { setErrorRecepcion(`Indica el motivo de rechazo de ${lot.producto}.`); return; }
       const quantityMatches = Number(receipt.receivedQuantity).toFixed(3) === Number(lot.cantidad).toFixed(3);
-      if (lot.perecible && receipt.conforme === "true" && quantityMatches && !receipt.expiryDate) { alert(`Indica el vencimiento de ${lot.producto}.`); return; }
+      if (lot.perecible && receipt.conforme === "true" && quantityMatches && !receipt.expiryDate) { setErrorRecepcion(`Indica el vencimiento de ${lot.producto}.`); return; }
     }
     const willHaveRejectedLots = lots.some((lot) => {
       const receipt = recepcionProductos.find((item) => item.detailId === lot.idDetalle);
@@ -238,8 +251,13 @@ export function useCompras({ apiRequest, apiDownload, logueado, seccion, esAdmin
       const message = willReceiveAnyLot
         ? "Se ingresarán al inventario los lotes conformes y la orden quedará parcialmente entregada. Los lotes rechazados no ingresarán. ¿Deseas continuar?"
         : "Todos los lotes quedarán rechazados y no ingresarán al inventario. ¿Deseas continuar?";
-      if (!window.confirm(message)) return;
+      if (!confirmacionRecepcion) {
+        setConfirmacionRecepcion(message);
+        return;
+      }
     }
+    setErrorRecepcion("");
+    setConfirmacionRecepcion("");
     setGuardandoRecepcion(true);
     try {
       const result = await apiRequest(`/purchases/${compraVerificando.idCompra}/receive/`, { method: "POST", body: JSON.stringify({
@@ -262,7 +280,7 @@ export function useCompras({ apiRequest, apiDownload, logueado, seccion, esAdmin
         "Rechazado": "Recepción registrada. Ningún lote ingresó al inventario.",
       };
       alert(messages[result.state] || "Recepción registrada.");
-    } catch (error) { alert(error.message); }
+    } catch (error) { setErrorRecepcion(error.message || "No se pudo registrar la revisión."); }
     finally { setGuardandoRecepcion(false); }
   };
   const registrarFactura = async (purchaseId, formData) => {
@@ -302,7 +320,7 @@ export function useCompras({ apiRequest, apiDownload, logueado, seccion, esAdmin
       cargandoCompras: historial.cargando, cargandoDetalleProveedorCompra,
       cargandoProductosCompra: productos.cargando, cargandoProveedores, carritoCompra,
       compraSeleccionada, compraVerificando, recepcionProductos, observacionesRecepcion,
-      guardandoRecepcion, ordenCompraPdf, cargandoOrdenCompraPdf,
+      guardandoRecepcion, errorRecepcion, confirmacionRecepcion, ordenCompraPdf, cargandoOrdenCompraPdf,
       compras: historial.registros, comprasFiltradas: historial.registros,
       errorCompras: historial.error, esAdministrador, cargarProveedores, errorProveedores,
       mostrarCompra, nuevaCompra, ordenCompraDefaults, proveedorCompraDetalle, setProveedorCompraDetalle,
@@ -314,7 +332,7 @@ export function useCompras({ apiRequest, apiDownload, logueado, seccion, esAdmin
       productosCompraFiltrados: productOptions, proveedores,
       proveedoresFiltrados: proveedores.filter((provider) => provider.name.toLowerCase().includes(busquedaProveedorCompra.toLowerCase())),
       registrarCompra, verOrdenCompraPDF, cerrarVistaPreviaOrden, registrarRecepcion,
-      prepararRecepcionCompra, actualizarRecepcionProducto, cancelarRecepcion,
+      prepararRecepcionCompra, actualizarRecepcionProducto, cancelarRecepcion, cancelarConfirmacionRecepcion,
       registrarFactura, descargarFactura,
       abrirNuevaCompra, cerrarNuevaCompra, seleccionarProveedorCompra,
       resumenDashboard, seccion, setBusquedaCompras,
