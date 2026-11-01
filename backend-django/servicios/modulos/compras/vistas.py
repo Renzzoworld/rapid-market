@@ -1,13 +1,15 @@
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.http import HttpResponse
+from django.http import FileResponse, HttpResponse
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from pathlib import PurePath
 
-from .servicios import listar_compras, procesar_accion_compra, registrar_compra
+from .servicios import listar_compras, procesar_accion_compra, registrar_compra, registrar_factura_proveedor
 from ...compartido.api_base import AdminWriteMixin
-from ...compartido.serializers import CompraSerializer, DatosVaciosSerializer, EntregaCompraSerializer
-from ...models import ConfiguracionTributaria, EmpresaCompradora
+from ...compartido.serializers import CompraSerializer, FacturaProveedorSerializer, RecepcionCompraSerializer
+from ...models import ConfiguracionTributaria, EmpresaCompradora, FacturaProveedor
 from .documentos import generar_pdf_orden_compra
 from .repositorio import list_purchases
 
@@ -68,17 +70,31 @@ class PurchaseActionView(AdminWriteMixin, APIView):
     admin_methods = {"POST"}
 
     def post(self, request, purchase_id, action):
-        if action == "deliver":
-            serializador = EntregaCompraSerializer(data=request.data)
-            serializador.is_valid(raise_exception=True)
-            payload = serializador.validated_data
-        elif action == "cancel":
-            serializador = DatosVaciosSerializer(data=request.data)
-            serializador.is_valid(raise_exception=True)
-            payload = serializador.validated_data
-        else:
-            payload = request.data
-        result, error, response_status = procesar_accion_compra(purchase_id, action, payload)
+        if action != "receive":
+            return Response({"detail": "Acción no válida."}, status=status.HTTP_404_NOT_FOUND)
+        serializador = RecepcionCompraSerializer(data=request.data)
+        serializador.is_valid(raise_exception=True)
+        result, error, response_status = procesar_accion_compra(purchase_id, action, serializador.validated_data, request.user)
         if error:
             return Response(error, status=response_status)
         return Response(result, status=response_status)
+
+
+class PurchaseInvoiceView(AdminWriteMixin, APIView):
+    admin_methods = {"POST"}
+
+    def post(self, request, purchase_id):
+        serializer = FacturaProveedorSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response({"invoice": registrar_factura_proveedor(request.user, purchase_id, serializer.validated_data)}, status=status.HTTP_201_CREATED)
+
+
+class PurchaseInvoiceFileView(AdminWriteMixin, APIView):
+    admin_methods = {"GET"}
+
+    def get(self, request, purchase_id):
+        invoice = get_object_or_404(FacturaProveedor, compra_id=purchase_id)
+        if not invoice.archivo:
+            return Response({"detail": "Esta factura no tiene un archivo adjunto."}, status=status.HTTP_404_NOT_FOUND)
+        filename = PurePath(invoice.archivo.name).name
+        return FileResponse(invoice.archivo.open("rb"), as_attachment=True, filename=filename)

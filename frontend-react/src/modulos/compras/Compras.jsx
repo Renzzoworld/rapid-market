@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useContextoAplicacion } from "../../compartido/contexto/useContextoAplicacion.js";
 import Paginacion from "../../compartido/componentes/Paginacion.jsx";
 import SugerenciasProductos from "../../compartido/componentes/SugerenciasProductos.jsx";
@@ -9,7 +10,7 @@ const fechaHoyLocal = () => {
 
 export function Compras() {
   const { estadoCompras } = useContextoAplicacion();
-  const { abrirNuevaCompra, busquedaCompras, cargandoCompras, comprasFiltradas, errorCompras, esAdministrador, obtenerCodigoCompra, obtenerEstadoCompra, obtenerLotesCompra, paginaCompras, resumenDashboard, seccion, setBusquedaCompras, setCompraSeleccionada, setCompraVerificando, setFechasVencimiento, setPaginaCompras, totalCompras, totalComprasRegistros } = estadoCompras;
+  const { abrirNuevaCompra, busquedaCompras, cargandoCompras, comprasFiltradas, errorCompras, esAdministrador, obtenerCodigoCompra, obtenerEstadoCompra, obtenerLotesCompra, paginaCompras, prepararRecepcionCompra, resumenDashboard, seccion, setBusquedaCompras, setCompraSeleccionada, setPaginaCompras, totalCompras, totalComprasRegistros } = estadoCompras;
 
   return (
     <>
@@ -74,7 +75,7 @@ export function Compras() {
                       <th>Total (IGV incluido)</th>
                       <th>Estado</th>
                       <th>Detalles</th>
-                      <th>Verificar</th>
+                      <th>Recepción</th>
                     </tr>
                   </thead>
 
@@ -120,21 +121,10 @@ export function Compras() {
                           <button
                             type="button"
                             className="details-button"
-                            disabled={obtenerEstadoCompra(compra) !== "Pendiente de entrega"}
-                            onClick={() => {
-                              setCompraVerificando(compra);
-                              setFechasVencimiento(
-                                obtenerLotesCompra(compra).reduce(
-                                  (fechas, lote) => ({
-                                    ...fechas,
-                                    [lote.idLote]: lote.fechaVencimiento || "",
-                                  }),
-                                  {}
-                                )
-                              );
-                            }}
+                            disabled={obtenerEstadoCompra(compra) !== "Pendiente"}
+                            onClick={() => prepararRecepcionCompra(compra)}
                           >
-                            Verificar
+                            Registrar recepción
                           </button>
                         </td>
 
@@ -158,13 +148,25 @@ export function Compras() {
 
 export function DetalleCompra() {
   const { estadoCompras } = useContextoAplicacion();
-  const { compraSeleccionada, verOrdenCompraPDF, cerrarVistaPreviaOrden, ordenCompraPdf, cargandoOrdenCompraPdf, obtenerCodigoCompra, obtenerCodigoLote, obtenerLotesCompra, setCompraSeleccionada } = estadoCompras;
+  const { compraSeleccionada, verOrdenCompraPDF, cerrarVistaPreviaOrden, ordenCompraPdf, cargandoOrdenCompraPdf, obtenerCodigoCompra, obtenerCodigoLote, obtenerLotesCompra, registrarFactura, descargarFactura, setCompraSeleccionada } = estadoCompras;
+  const [mostrarFormularioFactura, setMostrarFormularioFactura] = useState(false);
+
+  const guardarFactura = async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const datos = new FormData(form);
+    const payload = new FormData();
+    ["tipo", "numero", "fecha_emision", "monto_total"].forEach((key) => payload.append(key, datos.get(key)));
+    const archivo = form.elements.archivo.files[0];
+    if (archivo) payload.append("archivo", archivo);
+    if (await registrarFactura(compraSeleccionada.idCompra, payload)) setMostrarFormularioFactura(false);
+  };
 
   return (
     <>
       {compraSeleccionada && (
         <div className="modal-overlay">
-          <div className="modal-card sale-details-modal">
+          <div className="modal-card sale-details-modal purchase-details-modal">
             <div className="modal-header">
               <div>
                 <h2>Detalles de compra</h2>
@@ -173,14 +175,16 @@ export function DetalleCompra() {
               <button
                 type="button"
                 className="modal-close"
-                onClick={() => { cerrarVistaPreviaOrden(); setCompraSeleccionada(null); }}
+                onClick={() => { cerrarVistaPreviaOrden(); setMostrarFormularioFactura(false); setCompraSeleccionada(null); }}
                 aria-label="Cerrar detalles de compra"
               >
                 ×
               </button>
             </div>
 
-            <div className="sale-details-table-container">
+            <section className="purchase-record-section purchase-order-lines-section">
+              <h3>Productos de la orden</h3>
+              <div className="sale-details-table-container">
               <table className="sale-details-table">
                 <thead>
                   <tr>
@@ -220,19 +224,59 @@ export function DetalleCompra() {
                     </tr>
                   ))}
                 </tbody>
-                <tfoot>
-                  <tr><td colSpan="6"><strong>Subtotal</strong></td><td colSpan="2">S/ {Number(compraSeleccionada.subtotal || 0).toFixed(2)}</td></tr>
-                </tfoot>
               </table>
-            </div>
-            <div className="purchase-order-info">
-              <p><strong>Proveedor:</strong> {compraSeleccionada.razonSocialProveedor || compraSeleccionada.proveedor} · RUC {compraSeleccionada.rucProveedor || "—"}</p>
-              <p><strong>Correo y teléfono seleccionados:</strong> {compraSeleccionada.correoProveedor || "—"} · {compraSeleccionada.telefonoProveedor || "—"}</p>
-              {compraSeleccionada.nombreContactoProveedor && <p><strong>Contacto:</strong> {compraSeleccionada.nombreContactoProveedor} · {compraSeleccionada.cargoContactoProveedor} · {[compraSeleccionada.telefonoContactoProveedor, compraSeleccionada.correoContactoProveedor].filter(Boolean).join(" · ")}</p>}
-              <p><strong>Entrega requerida:</strong> {compraSeleccionada.fechaEntregaRequerida || "—"}</p>
-              <p><strong>Lugar de entrega:</strong> {compraSeleccionada.lugarEntrega || "—"}</p>
-            </div>
-            <div className="modal-actions"><button type="button" className="primary-button" disabled={cargandoOrdenCompraPdf} onClick={() => verOrdenCompraPDF(compraSeleccionada)}>{cargandoOrdenCompraPdf ? "Preparando PDF..." : "Ver orden de compra PDF"}</button></div>
+              </div>
+            </section>
+            <div className="modal-actions purchase-pdf-actions"><button type="button" className="primary-button" disabled={cargandoOrdenCompraPdf} onClick={() => verOrdenCompraPDF(compraSeleccionada)}>{cargandoOrdenCompraPdf ? "Preparando PDF..." : "Ver orden de compra PDF"}</button></div>
+            <section className="purchase-record-section">
+              <h3>Datos del proveedor y entrega</h3>
+              <div className="purchase-document-grid">
+                <p><strong>Razón social:</strong><br />{compraSeleccionada.razonSocialProveedor || compraSeleccionada.proveedor}</p>
+                <p><strong>RUC:</strong><br />{compraSeleccionada.rucProveedor || "—"}</p>
+                <p><strong>Correo:</strong><br />{compraSeleccionada.correoProveedor || "—"}</p>
+                <p><strong>Teléfono:</strong><br />{compraSeleccionada.telefonoProveedor || "—"}</p>
+                {compraSeleccionada.nombreContactoProveedor && <p><strong>Contacto:</strong><br />{compraSeleccionada.nombreContactoProveedor} · {compraSeleccionada.cargoContactoProveedor}<br />{[compraSeleccionada.telefonoContactoProveedor, compraSeleccionada.correoContactoProveedor].filter(Boolean).join(" · ")}</p>}
+                <p><strong>Entrega requerida:</strong><br />{compraSeleccionada.fechaEntregaRequerida || "—"}</p>
+                <p><strong>Lugar de entrega:</strong><br />{compraSeleccionada.lugarEntrega || "—"}</p>
+              </div>
+            </section>
+            {compraSeleccionada.recepcion && (
+              <section className="purchase-record-section">
+                <h3>Registro de recepción</h3>
+                <p><strong>Resultado:</strong> <span className={`purchase-status ${compraSeleccionada.recepcion.resultado.toLowerCase().replaceAll(" ", "-")}`}>{compraSeleccionada.recepcion.resultado}</span></p>
+                <p><strong>Fecha:</strong> {compraSeleccionada.recepcion.fecha}</p>
+                <div className="table-container purchase-record-table"><table><thead><tr><th>Producto</th><th>Cantidad recibida</th><th>Revisión</th><th>Detalle</th></tr></thead><tbody>
+                  {compraSeleccionada.recepcion.items.map((item) => {
+                    const lot = obtenerLotesCompra(compraSeleccionada).find((entry) => entry.idDetalle === item.idDetalle);
+                    return <tr key={item.idDetalle}><td>{lot?.producto || "Producto"}</td><td>{item.cantidadRecibida}</td><td>{item.conforme ? "Conforme" : "Rechazado"}</td><td>{item.motivoRechazo || item.fechaVencimiento || "—"}</td></tr>;
+                  })}
+                </tbody></table></div>
+                {compraSeleccionada.recepcion.observaciones && <p><strong>Observaciones:</strong> {compraSeleccionada.recepcion.observaciones}</p>}
+              </section>
+            )}
+            {compraSeleccionada.recepcion && <section className="purchase-record-section">
+              <h3>Factura del proveedor</h3>
+              {compraSeleccionada.facturaProveedor ? (
+                <>
+                  <div className="purchase-document-grid">
+                    <p><strong>Tipo:</strong> {compraSeleccionada.facturaProveedor.tipo}</p>
+                    <p><strong>Número:</strong> {compraSeleccionada.facturaProveedor.numero}</p>
+                    <p><strong>Fecha de emisión:</strong> {compraSeleccionada.facturaProveedor.fechaEmision}</p>
+                    <p><strong>Monto:</strong> S/ {compraSeleccionada.facturaProveedor.montoTotal.toFixed(2)}</p>
+                  </div>
+                  {compraSeleccionada.facturaProveedor.tieneArchivo && <button type="button" className="secondary-button" onClick={() => descargarFactura(compraSeleccionada.idCompra, compraSeleccionada.facturaProveedor.nombreArchivo)}>Descargar {compraSeleccionada.facturaProveedor.nombreArchivo || "archivo de factura"}</button>}
+                </>
+              ) : mostrarFormularioFactura ? (
+                <form className="purchase-invoice-form" onSubmit={guardarFactura}>
+                  <label>Tipo de comprobante<select name="tipo" defaultValue="Factura" required><option>Factura</option><option>Boleta</option><option>Otro</option></select></label>
+                  <label>Número de comprobante<input name="numero" maxLength="50" required placeholder="Ej. F001-0000123" /></label>
+                  <label>Fecha de emisión<input name="fecha_emision" type="date" required defaultValue={fechaHoyLocal()} /></label>
+                  <label>Monto total (S/)<input name="monto_total" type="number" min="0.01" step="0.01" required defaultValue={Number(compraSeleccionada.total || 0).toFixed(2)} /></label>
+                  <label className="purchase-invoice-file">Archivo (opcional)<input name="archivo" type="file" accept=".pdf,.xml,.jpg,.jpeg,.png" /><small>PDF, XML, JPG o PNG; máximo 10 MB.</small></label>
+                  <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setMostrarFormularioFactura(false)}>Cancelar</button><button type="submit" className="primary-button">Guardar factura</button></div>
+                </form>
+              ) : <button type="button" className="secondary-button" onClick={() => setMostrarFormularioFactura(true)}>Registrar factura</button>}
+            </section>}
           </div>
         </div>
       )}
@@ -258,7 +302,7 @@ export function DetalleCompra() {
 }
 export function VerificarCompra() {
   const { estadoCompras } = useContextoAplicacion();
-  const { calcularTotalCompra, cancelarCompra, compraCancelando, compraVerificando, fechasVencimiento, obtenerCodigoCompra, obtenerCodigoLote, obtenerLotesCompra, setCompraCancelando, setCompraVerificando, setFechasVencimiento, validarCompra } = estadoCompras;
+  const { compraVerificando, recepcionProductos, observacionesRecepcion, guardandoRecepcion, actualizarRecepcionProducto, cancelarRecepcion, obtenerCodigoCompra, obtenerCodigoLote, obtenerLotesCompra, registrarRecepcion, setObservacionesRecepcion } = estadoCompras;
 
   return (
     <>
@@ -267,116 +311,44 @@ export function VerificarCompra() {
           <div className="modal-card sale-details-modal purchase-verification-modal">
             <div className="modal-header">
               <div>
-                <h2>Verificar compra</h2>
+                <h2>Revisar entrega</h2>
                 <p>{obtenerCodigoCompra(compraVerificando)}</p>
               </div>
-
-              <button
-                type="button"
-                className="modal-close"
-                onClick={() => {
-                  setCompraVerificando(null);
-                  setFechasVencimiento({});
-                }}
-                aria-label="Volver al panel anterior"
-              >
-                ×
-              </button>
+              <button type="button" className="modal-close" onClick={cancelarRecepcion} aria-label="Cerrar revisión">×</button>
             </div>
 
             <div className="purchase-verification-summary">
-              <strong>ID de compra</strong>
+              <strong>Orden de compra</strong>
               <span>{obtenerCodigoCompra(compraVerificando)}</span>
-              <strong>Fecha de compra</strong>
-              <span>{compraVerificando.fecha}</span>
+              <strong>Proveedor</strong>
+              <span>{compraVerificando.proveedor}</span>
             </div>
 
-            <div className="sale-details-table-container">
-              <table className="sale-details-table">
-                <thead>
-                  <tr>
-                    <th>ID lote</th>
-                    <th>Producto</th>
-                    <th>Cantidad</th>
-                    <th>Precio de compra</th>
-                    <th>Subtotal</th>
-                  </tr>
-                </thead>
+            <p className="receipt-instructions">Revisa cada producto y registra la cantidad recibida. Si un producto está dañado, vencido o no corresponde, marca “Rechazar esta entrega”. En ese caso se rechazará toda la orden y no ingresará ningún producto al inventario.</p>
+            <div className="table-container purchase-receipt-table">
+              <table>
+                <thead><tr><th>Producto / lote</th><th>Solicitado</th><th>Recibido</th><th>Resultado</th><th>Vencimiento</th></tr></thead>
                 <tbody>
-                  {obtenerLotesCompra(compraVerificando).map((lote) => (
-                    <tr key={lote.idLote}>
-                      <td>{obtenerCodigoLote(lote)}</td>
-                      <td>{lote.producto}</td>
+                  {obtenerLotesCompra(compraVerificando).map((lote) => {
+                    const receipt = recepcionProductos.find((item) => item.detailId === lote.idDetalle) || {};
+                    return <tr key={lote.idDetalle}>
+                      <td><strong>{lote.producto}</strong><small>{obtenerCodigoLote(lote)}</small></td>
                       <td>{lote.cantidad}</td>
-                      <td>S/ {lote.precioUnitario.toFixed(2)}</td>
-                      <td>
-                        S/ {(lote.precioUnitario * lote.cantidad).toFixed(2)}
+                      <td><input type="number" min="0" step="0.001" required aria-label={`Cantidad recibida de ${lote.producto}`} value={receipt.receivedQuantity ?? ""} onChange={(event) => actualizarRecepcionProducto(lote.idDetalle, { receivedQuantity: event.target.value })} /></td>
+                      <td><select required aria-label={`Resultado de revisión de ${lote.producto}`} value={receipt.conforme ?? ""} onChange={(event) => actualizarRecepcionProducto(lote.idDetalle, { conforme: event.target.value })}><option value="">Seleccionar</option><option value="true">Conforme</option><option value="false">Rechazar esta entrega</option></select>
+                        {receipt.conforme === "false" && <input className="receipt-rejection-reason" maxLength="250" required placeholder="Motivo del rechazo" value={receipt.motivoRechazo || ""} onChange={(event) => actualizarRecepcionProducto(lote.idDetalle, { motivoRechazo: event.target.value })} />}
                       </td>
-                    </tr>
-                  ))}
+                      <td>{lote.perecible ? <input type="date" aria-label={`Vencimiento de ${lote.producto}`} value={receipt.expiryDate || ""} onChange={(event) => actualizarRecepcionProducto(lote.idDetalle, { expiryDate: event.target.value })} /> : "No aplica"}</td>
+                    </tr>;
+                  })}
                 </tbody>
-                <tfoot>
-                  <tr><td colSpan="4"><strong>Subtotal</strong></td><td>S/ {Number(compraVerificando.subtotal || 0).toFixed(2)}</td></tr>
-                  <tr><td colSpan="4"><strong>IGV {compraVerificando.igvPorcentaje == null ? "" : `(${compraVerificando.igvPorcentaje.toFixed(2)}%)`}</strong></td><td>S/ {Number(compraVerificando.igvMonto || 0).toFixed(2)}</td></tr>
-                  <tr><td colSpan="4"><strong>Total final</strong></td><td><strong>S/ {calcularTotalCompra(compraVerificando).toFixed(2)}</strong></td></tr>
-                </tfoot>
               </table>
             </div>
-
-            <div className="expiration-section">
-              <h3>Fechas de vencimiento</h3>
-              {obtenerLotesCompra(compraVerificando).some((lote) => lote.perecible) ? (
-                obtenerLotesCompra(compraVerificando)
-                  .filter((lote) => lote.perecible)
-                  .map((lote) => (
-                    <div className="expiration-row" key={lote.idLote}>
-                      <label htmlFor={`expiration-${lote.idLote}`}>
-                        {obtenerCodigoLote(lote)} - {lote.producto}
-                      </label>
-                      <input
-                        id={`expiration-${lote.idLote}`}
-                        type="date"
-                        value={fechasVencimiento[lote.idLote] || ""}
-                        onChange={(e) =>
-                          setFechasVencimiento({
-                            ...fechasVencimiento,
-                            [lote.idLote]: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                  ))
-              ) : (
-                <p>No hay productos perecibles en esta compra.</p>
-              )}
+            <label className="receipt-observations">Observaciones de recepción (opcional)<textarea rows="3" maxLength="2000" value={observacionesRecepcion} onChange={(event) => setObservacionesRecepcion(event.target.value)} placeholder="Anotaciones sobre la entrega" /></label>
+            <div className="modal-actions verification-actions">
+              <button type="button" className="secondary-button" onClick={cancelarRecepcion}>Cerrar</button>
+              <button type="button" className="primary-button" disabled={guardandoRecepcion} onClick={registrarRecepcion}>{guardandoRecepcion ? "Guardando revisión..." : "Registrar revisión"}</button>
             </div>
-
-            {compraCancelando ? (
-              <div className="cancel-confirmation">
-                <strong>¿Estas seguro de cancelar esta orden de compra?</strong>
-                <div className="modal-actions">
-                  <button type="button" className="danger-button" onClick={cancelarCompra}>
-                    Cancelar compra
-                  </button>
-                  <button type="button" className="secondary-button" onClick={() => setCompraCancelando(null)}>
-                    Volver al panel anterior
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="modal-actions verification-actions">
-                <button
-                  type="button"
-                  className="danger-button"
-                  onClick={() => setCompraCancelando(compraVerificando)}
-                >
-                  Cancelar orden de compra
-                </button>
-                <button type="button" className="primary-button" onClick={validarCompra}>
-                  Validar compra
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}

@@ -7,7 +7,7 @@ def dashboard_summary(user_id=None, include_financials=True):
         WITH product_stock AS (
             SELECT p.id, p.nombre, p.stock_minimo,
                    COALESCE(SUM(CASE
-                       WHEN ec.nombre = 'Entregado'
+                       WHEN ec.nombre IN ('Recibido', 'Parcialmente entregado')
                          AND (l.fecha_vencimiento IS NULL OR l.fecha_vencimiento >= CURRENT_DATE)
                        THEN l.cantidad_actual ELSE 0
                    END), 0) AS stock
@@ -28,7 +28,7 @@ def dashboard_summary(user_id=None, include_financials=True):
             SELECT p.id, p.nombre AS name, u.abreviatura AS unit_abbr,
                    p.stock_minimo,
                    COALESCE(SUM(CASE
-                       WHEN ec.nombre = 'Entregado'
+                       WHEN ec.nombre IN ('Recibido', 'Parcialmente entregado')
                          AND (l.fecha_vencimiento IS NULL OR l.fecha_vencimiento >= CURRENT_DATE)
                        THEN l.cantidad_actual ELSE 0
                    END), 0) AS stock
@@ -94,8 +94,18 @@ def dashboard_summary(user_id=None, include_financials=True):
         expenses = one("SELECT COUNT(*) AS expense_count, COALESCE(SUM(monto),0) AS total FROM gastos")
         purchases = one("""
             SELECT COUNT(*) AS purchase_count,
-                   COALESCE(SUM(CASE WHEN ec.nombre = 'Entregado'
-                       THEN c.total ELSE 0 END), 0) AS total
+                   COALESCE(SUM(CASE
+                       WHEN ec.nombre = 'Recibido' THEN c.total
+                       WHEN ec.nombre = 'Parcialmente entregado' THEN COALESCE((
+                           SELECT ROUND(SUM(ROUND(dr.cantidad_recibida * dc.precio_unitario, 2))
+                               + SUM(ROUND(dr.cantidad_recibida * dc.precio_unitario, 2))
+                                 * COALESCE(c.igv_porcentaje, 0) / 100, 2)
+                           FROM recepciones_compra rc
+                           JOIN detalle_recepcion_compra dr ON dr.id_recepcion = rc.id
+                           JOIN detalle_compras dc ON dc.id = dr.id_detalle_compra
+                           WHERE rc.id_compra = c.id AND dr.conforme = true
+                       ), 0)
+                       ELSE 0 END), 0) AS total
             FROM compras c
             JOIN estados_compra ec ON ec.id = c.id_estado
         """)

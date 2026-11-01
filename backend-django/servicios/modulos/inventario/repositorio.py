@@ -31,11 +31,11 @@ def get_product(product_id):
                p.activo AS active, p.id_categoria AS category_id, cp.nombre AS category, u.id AS unit_id, u.nombre AS unit,
                u.abreviatura AS unit_abbr,
                COALESCE(SUM(CASE
-                   WHEN ec.nombre = 'Entregado'
+                   WHEN ec.nombre IN ('Recibido', 'Parcialmente entregado')
                      AND (l.fecha_vencimiento IS NULL OR l.fecha_vencimiento >= CURRENT_DATE)
                    THEN l.cantidad_actual ELSE 0
                END), 0) AS stock,
-               COUNT(DISTINCT l.id) FILTER (WHERE ec.nombre = 'Entregado') AS lot_count
+               COUNT(DISTINCT l.id) FILTER (WHERE ec.nombre IN ('Recibido', 'Parcialmente entregado') AND l.cantidad_actual > 0) AS lot_count
         FROM productos p
         JOIN unidades_medida u ON u.id = p.id_unidad
         JOIN categorias_productos cp ON cp.id = p.id_categoria
@@ -60,7 +60,7 @@ def list_product_lots(product_id):
         JOIN estados_compra ec ON ec.id = c.id_estado
         JOIN productos p ON p.id = dc.id_producto
         JOIN unidades_medida u ON u.id = p.id_unidad
-        WHERE dc.id_producto = %s AND ec.nombre = 'Entregado'
+        WHERE dc.id_producto = %s AND ec.nombre IN ('Recibido', 'Parcialmente entregado') AND l.cantidad_actual > 0
         ORDER BY c.fecha DESC, l.id DESC
     """, [product_id])
 
@@ -89,11 +89,11 @@ def list_product_page(page, search="", category_ids=None):
         SELECT pp.id, pp.name, pp.price, pp.perishable, pp.min_stock, pp.active, pp.category_id, pp.category,
                pp.unit_id, pp.unit, pp.unit_abbr,
                COALESCE(SUM(CASE
-                   WHEN ec.nombre = 'Entregado'
+                   WHEN ec.nombre IN ('Recibido', 'Parcialmente entregado')
                      AND (l.fecha_vencimiento IS NULL OR l.fecha_vencimiento >= CURRENT_DATE)
                    THEN l.cantidad_actual ELSE 0
                END), 0) AS stock,
-               COUNT(DISTINCT l.id) FILTER (WHERE ec.nombre = 'Entregado') AS lot_count
+               COUNT(DISTINCT l.id) FILTER (WHERE ec.nombre IN ('Recibido', 'Parcialmente entregado') AND l.cantidad_actual > 0) AS lot_count
         FROM product_page pp
         LEFT JOIN detalle_compras dc ON dc.id_producto = pp.id
         LEFT JOIN compras c ON c.id = dc.id_compra

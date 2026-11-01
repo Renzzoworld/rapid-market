@@ -1,5 +1,6 @@
 from django.db import connection
 import json
+from pathlib import PurePath
 
 from ...compartido.repositorio_base import one, rows
 
@@ -7,7 +8,7 @@ PAGE_SIZE = 10
 
 
 def pending_purchase_state():
-    return one("SELECT id FROM estados_compra WHERE nombre='Pendiente de entrega'")
+    return one("SELECT id FROM estados_compra WHERE nombre='Pendiente'")
 
 
 def provider_is_active(provider_id):
@@ -66,12 +67,12 @@ def lock_purchase(purchase_id):
 
 
 def purchase_lines(purchase_id):
-    return rows("SELECT dc.id,p.perecible FROM detalle_compras dc JOIN productos p ON p.id=dc.id_producto WHERE dc.id_compra=%s", [purchase_id])
+    return rows("SELECT dc.id,dc.cantidad AS ordered_quantity,p.perecible FROM detalle_compras dc JOIN productos p ON p.id=dc.id_producto WHERE dc.id_compra=%s ORDER BY dc.id", [purchase_id])
 
 
-def deliver_lot(detail_id, expiry):
+def deliver_lot(detail_id, quantity, expiry):
     with connection.cursor() as cursor:
-        cursor.execute("UPDATE lotes SET cantidad_actual=cantidad_inicial,fecha_vencimiento=%s WHERE id_detalle_compra=%s", [expiry, detail_id])
+        cursor.execute("UPDATE lotes SET cantidad_actual=%s,fecha_vencimiento=%s WHERE id_detalle_compra=%s", [quantity, expiry, detail_id])
 
 
 def purchase_state_id(state_name):
@@ -148,6 +149,25 @@ def list_purchases(*, page=None, search="", purchase_id=None):
             FROM detalle_compras dc JOIN productos p ON p.id = dc.id_producto
             LEFT JOIN lotes l ON l.id_detalle_compra = dc.id
             WHERE dc.id_compra = %s ORDER BY dc.id
+        """, [purchase["id"]])
+        purchase["receipt"] = one("""
+            SELECT id,fecha_recepcion AS received_at,resultado AS result,
+                   observaciones AS observations
+            FROM recepciones_compra WHERE id_compra=%s
+        """, [purchase["id"]])
+        if purchase["receipt"]:
+            purchase["receipt"]["items"] = rows("""
+                SELECT drc.id_detalle_compra AS detail_id, drc.cantidad_recibida AS received_quantity,
+                       drc.conforme, drc.motivo_rechazo AS rejection_reason,
+                       drc.fecha_vencimiento AS expiry_date
+                FROM detalle_recepcion_compra drc
+                WHERE drc.id_recepcion=%s ORDER BY drc.id_detalle_compra
+            """, [purchase["receipt"]["id"]])
+        purchase["invoice"] = one("""
+            SELECT tipo,numero,fecha_emision,monto_total,
+                   (archivo <> '') AS has_file,
+                   CASE WHEN archivo <> '' THEN regexp_replace(archivo, '^.*/', '') ELSE '' END AS filename
+            FROM facturas_proveedor WHERE id_compra=%s
         """, [purchase["id"]])
     return purchases
 

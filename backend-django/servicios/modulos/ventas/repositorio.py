@@ -24,7 +24,7 @@ def lock_available_lots(product_id):
         cursor.execute("""SELECT l.id,l.cantidad_actual,p.precio_venta FROM lotes l
             JOIN detalle_compras dc ON dc.id=l.id_detalle_compra JOIN compras c ON c.id=dc.id_compra
             JOIN estados_compra ec ON ec.id=c.id_estado JOIN productos p ON p.id=dc.id_producto
-            WHERE dc.id_producto=%s AND p.activo=true AND ec.nombre='Entregado'
+            WHERE dc.id_producto=%s AND p.activo=true AND ec.nombre IN ('Recibido','Parcialmente entregado')
               AND l.cantidad_actual>0 AND (l.fecha_vencimiento IS NULL OR l.fecha_vencimiento >= CURRENT_DATE)
             ORDER BY l.fecha_vencimiento NULLS LAST,c.fecha,l.id FOR UPDATE OF l""", [product_id])
         return cursor.fetchall()

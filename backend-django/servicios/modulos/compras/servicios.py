@@ -1,11 +1,14 @@
 from collections.abc import Mapping
-from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
-from ...models import ConfiguracionTributaria, ContactosProveedor, DatosProveedor, EmpresaCompradora, Proveedores
+from ...models import (
+    Compras, ConfiguracionTributaria, ContactosProveedor, DatosProveedor,
+    DetalleRecepcionCompra, EmpresaCompradora, FacturaProveedor,
+    RecepcionCompra, Proveedores,
+)
 
 from .repositorio import (
     active_product, create_lot, create_purchase, create_purchase_detail,
@@ -125,35 +128,92 @@ def registrar_compra(user, payload):
 
 
 @transaction.atomic
-def procesar_accion_compra(purchase_id, action, payload):
+def procesar_accion_compra(purchase_id, action, payload, user):
     data = object_payload(payload)
     purchase = lock_purchase(purchase_id)
     if not purchase:
         return None, {"detail": "Compra no encontrada."}, 404
-    if purchase["state"] != "Pendiente de entrega":
+    if purchase["state"] != "Pendiente":
         raise ValidationError({"detail": "Solo se puede modificar una compra pendiente."})
-    if action == "deliver":
+    if action == "receive":
         lines = purchase_lines(purchase_id)
-        expiries = data.get("expiries", {})
-        if not isinstance(expiries, Mapping):
-            raise ValidationError({"expiries": "Envía las fechas de vencimiento en un formato válido."})
+        submitted = data.get("items")
+        if not isinstance(submitted, list) or len(submitted) != len(lines):
+            raise ValidationError({"items": "Registra la revisión de todos los productos de la orden."})
+        by_id = {item["detail_id"]: item for item in submitted}
+        line_ids = {line["id"] for line in lines}
+        if len(by_id) != len(submitted) or set(by_id) != line_ids:
+            raise ValidationError({"items": "Los productos revisados no coinciden con la orden."})
+
+        reviewed = []
+        accepted_count = 0
         for line in lines:
-            expiry = expiries.get(str(line["id"]))
-            if line["perecible"] and not expiry:
-                raise ValidationError({"expiries": "Indica el vencimiento de todos los productos perecibles."})
-            if expiry:
-                try:
-                    expiry_date = expiry if isinstance(expiry, date) else date.fromisoformat(expiry)
-                except (ValueError, TypeError):
-                    raise ValidationError({"expiries": "Fecha de vencimiento no válida."})
-                if expiry_date < timezone.localdate():
-                    raise ValidationError({"expiries": "La fecha de vencimiento no puede estar en el pasado."})
-            deliver_lot(line["id"], expiry or None)
-        new_state = "Entregado"
-    elif action == "cancel":
-        new_state = "Cancelado"
+            item = by_id[line["id"]]
+            quantity = item["received_quantity"]
+            rejection_reason = item.get("motivo_rechazo", "").strip()
+            if not item["conforme"] and not rejection_reason:
+                raise ValidationError({"items": "Indica por qué se rechaza cada producto observado."})
+            reasons = []
+            quantity_matches = quantity == line["ordered_quantity"]
+            if not quantity_matches:
+                reasons.append("La cantidad recibida no coincide con la solicitada.")
+            expiry = item.get("expiry_date")
+            if line["perecible"] and item["conforme"] and quantity_matches and not expiry:
+                raise ValidationError({"items": "Indica el vencimiento de cada producto perecible conforme."})
+            if line["perecible"] and expiry and expiry < timezone.localdate():
+                reasons.append("El producto tiene fecha de vencimiento pasada.")
+            line_conforms = item["conforme"] and not reasons
+            if line_conforms:
+                accepted_count += 1
+            reviewed.append({
+                "detail_id": line["id"], "quantity": quantity,
+                "conforme": line_conforms,
+                "reason": " ".join(reason for reason in [rejection_reason, *reasons] if reason),
+                "expiry": expiry,
+            })
+
+        if accepted_count == len(lines):
+            result = "Recibido"
+        elif accepted_count:
+            result = "Parcialmente entregado"
+        else:
+            result = "Rechazado"
+        receipt = RecepcionCompra.objects.create(
+            compra_id=purchase_id, resultado=result,
+            observaciones=data.get("observations", "").strip(), registrado_por=user,
+        )
+        for item in reviewed:
+            DetalleRecepcionCompra.objects.create(
+                recepcion=receipt, detalle_compra_id=item["detail_id"],
+                cantidad_recibida=item["quantity"], conforme=item["conforme"],
+                motivo_rechazo=item["reason"], fecha_vencimiento=item["expiry"],
+            )
+            if item["conforme"]:
+                deliver_lot(item["detail_id"], item["quantity"], item["expiry"])
     else:
         return None, {"detail": "Acción no válida."}, 404
-    state = purchase_state_id(new_state)
+    state = purchase_state_id(result)
     set_purchase_state(purchase_id, state["id"])
     return list_purchases(purchase_id=purchase_id)[0], None, 200
+
+
+@transaction.atomic
+def registrar_factura_proveedor(user, purchase_id, payload):
+    purchase = Compras.objects.select_for_update().filter(pk=purchase_id).first()
+    if not purchase:
+        raise ValidationError({"detail": "Orden de compra no encontrada."})
+    if FacturaProveedor.objects.filter(compra_id=purchase_id).exists():
+        raise ValidationError({"detail": "Esta orden ya tiene una factura registrada."})
+    data = object_payload(payload)
+    invoice = FacturaProveedor.objects.create(
+        compra=purchase, tipo=data["tipo"], numero=data["numero"],
+        fecha_emision=data["fecha_emision"], monto_total=data["monto_total"],
+        archivo=data.get("archivo", ""), registrado_por=user,
+    )
+    return {
+        "tipo": invoice.tipo, "numero": invoice.numero,
+        "fecha_emision": invoice.fecha_emision,
+        "monto_total": invoice.monto_total,
+        "has_file": bool(invoice.archivo),
+        "filename": invoice.archivo.name.rsplit("/", 1)[-1] if invoice.archivo else "",
+    }

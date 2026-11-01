@@ -575,17 +575,22 @@ body {
   white-space: nowrap;
 }
 
-.purchase-status.pendiente-de-entrega {
+.purchase-status.pendiente {
   background: #fef3c7;
   color: #92400e;
 }
 
-.purchase-status.entregado {
+.purchase-status.recibido {
   background: #dcfce7;
   color: #166534;
 }
 
-.purchase-status.cancelado {
+.purchase-status.parcialmente-entregado {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.purchase-status.rechazado {
   background: #fee2e2;
   color: #991b1b;
 }
@@ -1451,9 +1456,35 @@ body {
 .purchase-pdf-download { display: inline-flex; align-items: center; text-decoration: none; }
 .purchase-order-info { margin-top: 1rem; padding: .8rem 1rem; border: 1px solid #dbe3ed; border-radius: 9px; background: #f8fafc; color: #475569; }
 .purchase-order-info p { margin: .35rem 0; overflow-wrap: anywhere; }
+.purchase-details-modal { max-height: 92vh; overflow-y: auto; }
+.purchase-verification-modal { max-width: 1100px; max-height: 92vh; overflow-y: auto; }
+.receipt-instructions { padding: .85rem 1rem; border: 1px solid #bfdbfe; border-radius: 8px; background: #eff6ff; color: #1e3a5f; line-height: 1.5; }
+.purchase-receipt-table { margin-top: 1rem; max-height: 45vh; overflow: auto; }
+.purchase-receipt-table table, .purchase-record-table table { width: 100%; border-collapse: collapse; }
+.purchase-receipt-table th, .purchase-receipt-table td, .purchase-record-table th, .purchase-record-table td { padding: .7rem; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: top; }
+.purchase-receipt-table th { position: sticky; top: 0; background: #f8fafc; z-index: 1; color: #334155; font-size: .85rem; }
+.purchase-receipt-table td:first-child { min-width: 180px; }
+.purchase-receipt-table td:first-child small { display: block; margin-top: .25rem; color: #64748b; }
+.purchase-receipt-table input, .purchase-receipt-table select { width: 100%; min-width: 115px; padding: .55rem; border: 1px solid #cbd5e1; border-radius: 6px; }
+.purchase-receipt-table .receipt-rejection-reason { margin-top: .4rem; min-width: 170px; }
+.receipt-observations { display: grid; gap: .45rem; margin-top: 1rem; color: #374151; font-weight: 600; }
+.receipt-observations textarea { width: 100%; padding: .7rem; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; }
+.purchase-record-section { margin-top: 1.1rem; padding: 1rem; border: 1px solid #dbe3ed; border-radius: 9px; background: #fbfdff; }
+.purchase-record-section h3 { margin: 0 0 .8rem; color: #17324d; font-size: 1rem; }
+.purchase-record-section p { margin: .45rem 0; }
+.purchase-record-table { margin-top: .8rem; overflow-x: auto; }
+.purchase-document-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .25rem 1rem; }
+.purchase-invoice-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem 1rem; }
+.purchase-invoice-form label { display: grid; gap: .4rem; color: #374151; font-size: .9rem; font-weight: 600; }
+.purchase-invoice-form input, .purchase-invoice-form select { width: 100%; padding: .65rem; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; }
+.purchase-invoice-form .purchase-invoice-file, .purchase-invoice-form .modal-actions { grid-column: 1 / -1; }
+.purchase-invoice-file small { color: #64748b; font-weight: 400; }
 
 @media (max-width: 800px) {
   .purchase-pdf-modal { height: 92vh; padding: 18px; }
+  .purchase-document-grid, .purchase-invoice-form { grid-template-columns: 1fr; }
+  .purchase-invoice-form .purchase-invoice-file, .purchase-invoice-form .modal-actions { grid-column: auto; }
+  .purchase-verification-modal { padding: 18px; }
 }
 
 .provider-related-section > header,

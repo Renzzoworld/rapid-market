@@ -118,10 +118,30 @@ class CierreSesionSerializer(serializers.Serializer):
     refresh = serializers.CharField(max_length=4096, trim_whitespace=True)
 
 
-class EntregaCompraSerializer(serializers.Serializer):
-    expiries = serializers.DictField(child=serializers.DateField(input_formats=["%Y-%m-%d"]), required=False, default=dict)
+class DetalleRecepcionSerializer(serializers.Serializer):
+    detail_id = serializers.IntegerField(min_value=1)
+    received_quantity = serializers.DecimalField(max_digits=12, decimal_places=3, min_value=Decimal("0"), max_value=Decimal("999999999.999"))
+    conforme = serializers.BooleanField()
+    motivo_rechazo = serializers.CharField(max_length=250, allow_blank=True, required=False, default='')
+    expiry_date = serializers.DateField(required=False, allow_null=True)
 
 
-class DatosVaciosSerializer(serializers.Serializer):
-    """Acepta un objeto vacío para acciones de compra sin datos adicionales."""
+class RecepcionCompraSerializer(serializers.Serializer):
+    items = DetalleRecepcionSerializer(many=True, allow_empty=False, max_length=100)
+    observations = serializers.CharField(max_length=2000, allow_blank=True, required=False, default='')
 
+
+class FacturaProveedorSerializer(serializers.Serializer):
+    tipo = serializers.ChoiceField(choices=["Factura", "Boleta", "Otro"])
+    numero = serializers.CharField(max_length=50, trim_whitespace=True)
+    fecha_emision = serializers.DateField()
+    monto_total = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal("0.01"), max_value=Decimal("999999999.99"))
+    archivo = serializers.FileField(required=False, allow_empty_file=False)
+
+    def validate_archivo(self, archivo):
+        extension = archivo.name.rsplit(".", 1)[-1].lower() if "." in archivo.name else ""
+        if extension not in {"pdf", "xml", "jpg", "jpeg", "png"}:
+            raise serializers.ValidationError("Adjunta un PDF, XML, JPG o PNG.")
+        if archivo.size > 10 * 1024 * 1024:
+            raise serializers.ValidationError("El archivo no puede superar los 10 MB.")
+        return archivo

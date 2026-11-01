@@ -38,6 +38,22 @@ export const mapearCompra = (purchase) => ({
   igvMonto: Number(purchase.igv_amount || 0), total: Number(purchase.total || 0),
   datosEmpresa: purchase.company || {}, responsableNombre: purchase.responsible_name || "",
   responsableRol: purchase.responsible_role || "",
+  recepcion: purchase.receipt ? {
+    resultado: purchase.receipt.result,
+    fecha: fechaVista(purchase.receipt.received_at),
+    observaciones: purchase.receipt.observations || "",
+    items: (purchase.receipt.items || []).map((item) => ({
+      idDetalle: item.detail_id, cantidadRecibida: Number(item.received_quantity),
+      conforme: item.conforme, motivoRechazo: item.rejection_reason || "",
+      fechaVencimiento: fechaVista(item.expiry_date),
+    })),
+  } : null,
+  facturaProveedor: purchase.invoice ? {
+    tipo: purchase.invoice.tipo, numero: purchase.invoice.numero,
+    fechaEmision: fechaVista(purchase.invoice.fecha_emision),
+    montoTotal: Number(purchase.invoice.monto_total),
+    tieneArchivo: purchase.invoice.has_file, nombreArchivo: purchase.invoice.filename || "",
+  } : null,
   costo: Number(purchase.total), estado: purchase.state,
   lotes: purchase.items.map((item) => ({
     idLote: item.lot_id, idDetalle: item.detail_id, idProducto: item.product_id,

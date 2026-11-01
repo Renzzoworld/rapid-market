@@ -30,8 +30,9 @@ export function useCompras({ apiRequest, apiDownload, logueado, seccion, esAdmin
   const [cargandoOrdenCompraPdf, setCargandoOrdenCompraPdf] = useState(false);
   const ordenCompraPdfUrl = useRef(null);
   const [compraVerificando, setCompraVerificando] = useState(null);
-  const [compraCancelando, setCompraCancelando] = useState(null);
-  const [fechasVencimiento, setFechasVencimiento] = useState({});
+  const [recepcionProductos, setRecepcionProductos] = useState([]);
+  const [observacionesRecepcion, setObservacionesRecepcion] = useState("");
+  const [guardandoRecepcion, setGuardandoRecepcion] = useState(false);
   const [nuevaCompra, setNuevaCompra] = useState(compraInicial);
   const [busquedaProveedorCompra, setBusquedaProveedorCompra] = useState("");
   const [busquedaProductoCompra, setBusquedaProductoCompra] = useState("");
@@ -192,33 +193,104 @@ export function useCompras({ apiRequest, apiDownload, logueado, seccion, esAdmin
   useEffect(() => () => {
     if (ordenCompraPdfUrl.current) URL.revokeObjectURL(ordenCompraPdfUrl.current);
   }, []);
-  const validarCompra = async () => {
-    if (!compraVerificando) return;
-    const expiries = {};
-    for (const lot of obtenerLotesCompra(compraVerificando)) {
-      const expiry = fechasVencimiento[lot.idLote] || lot.fechaVencimiento;
-      if (lot.perecible && !expiry) { alert("Agrega el vencimiento de cada producto perecible."); return; }
-      if (lot.idDetalle && expiry) expiries[lot.idDetalle] = expiry.split("/").reverse().join("-");
-    }
-    try {
-      await apiRequest(`/purchases/${compraVerificando.idCompra}/deliver/`, { method: "POST", body: JSON.stringify({ expiries }) });
-      await cargarDatos(accessToken);
-      setRevision((value) => value + 1);
-      invalidarInventario();
-      setCompraVerificando(null);
-      setFechasVencimiento({});
-    } catch (error) { alert(error.message); }
+  const prepararRecepcionCompra = (purchase) => {
+    setCompraVerificando(purchase);
+    setObservacionesRecepcion("");
+    setRecepcionProductos(obtenerLotesCompra(purchase).map((lot) => ({
+      detailId: lot.idDetalle,
+      receivedQuantity: "",
+      conforme: "",
+      motivoRechazo: "",
+      expiryDate: "",
+    })));
   };
-  const cancelarCompra = async () => {
-    if (!compraCancelando) return;
+  const actualizarRecepcionProducto = (detailId, changes) => {
+    setRecepcionProductos((items) => items.map((item) => item.detailId === detailId ? { ...item, ...changes } : item));
+  };
+  const cancelarRecepcion = () => {
+    setCompraVerificando(null);
+    setRecepcionProductos([]);
+    setObservacionesRecepcion("");
+  };
+  const registrarRecepcion = async () => {
+    if (!compraVerificando) return;
+    const lots = obtenerLotesCompra(compraVerificando);
+    for (const lot of lots) {
+      const receipt = recepcionProductos.find((item) => item.detailId === lot.idDetalle);
+      if (!receipt || receipt.receivedQuantity === "" || !receipt.conforme) { alert("Completa la cantidad recibida y el estado de cada producto."); return; }
+      if (receipt.conforme === "false" && !receipt.motivoRechazo.trim()) { alert(`Indica el motivo de rechazo de ${lot.producto}.`); return; }
+      const quantityMatches = Number(receipt.receivedQuantity).toFixed(3) === Number(lot.cantidad).toFixed(3);
+      if (lot.perecible && receipt.conforme === "true" && quantityMatches && !receipt.expiryDate) { alert(`Indica el vencimiento de ${lot.producto}.`); return; }
+    }
+    const willHaveRejectedLots = lots.some((lot) => {
+      const receipt = recepcionProductos.find((item) => item.detailId === lot.idDetalle);
+      const quantityMatches = Number(receipt.receivedQuantity).toFixed(3) === Number(lot.cantidad).toFixed(3);
+      const expired = lot.perecible && receipt.expiryDate && receipt.expiryDate < fechaHoyLocal();
+      return receipt.conforme === "false" || !quantityMatches || expired;
+    });
+    if (willHaveRejectedLots) {
+      const willReceiveAnyLot = lots.some((lot) => {
+        const receipt = recepcionProductos.find((item) => item.detailId === lot.idDetalle);
+        const quantityMatches = Number(receipt.receivedQuantity).toFixed(3) === Number(lot.cantidad).toFixed(3);
+        const notExpired = !lot.perecible || (receipt.expiryDate && receipt.expiryDate >= fechaHoyLocal());
+        return receipt.conforme === "true" && quantityMatches && notExpired;
+      });
+      const message = willReceiveAnyLot
+        ? "Se ingresarán al inventario los lotes conformes y la orden quedará parcialmente entregada. Los lotes rechazados no ingresarán. ¿Deseas continuar?"
+        : "Todos los lotes quedarán rechazados y no ingresarán al inventario. ¿Deseas continuar?";
+      if (!window.confirm(message)) return;
+    }
+    setGuardandoRecepcion(true);
     try {
-      await apiRequest(`/purchases/${compraCancelando.idCompra}/cancel/`, { method: "POST", body: JSON.stringify({}) });
+      const result = await apiRequest(`/purchases/${compraVerificando.idCompra}/receive/`, { method: "POST", body: JSON.stringify({
+        observations: observacionesRecepcion.trim(),
+        items: recepcionProductos.map((item) => ({
+          detail_id: item.detailId,
+          received_quantity: item.receivedQuantity,
+          conforme: item.conforme === "true",
+          motivo_rechazo: item.motivoRechazo.trim(),
+          expiry_date: item.expiryDate || null,
+        })),
+      }) });
       await cargarDatos(accessToken);
       setRevision((value) => value + 1);
-      invalidarInventario();
-      setCompraCancelando(null);
-      setCompraVerificando(null);
-      setFechasVencimiento({});
+      if (result.state === "Recibido" || result.state === "Parcialmente entregado") invalidarInventario();
+      cancelarRecepcion();
+      const messages = {
+        "Recibido": "Recepción registrada. Todos los lotes ingresaron al inventario.",
+        "Parcialmente entregado": "Recepción registrada. Los lotes conformes ingresaron al inventario; los rechazados no.",
+        "Rechazado": "Recepción registrada. Ningún lote ingresó al inventario.",
+      };
+      alert(messages[result.state] || "Recepción registrada.");
+    } catch (error) { alert(error.message); }
+    finally { setGuardandoRecepcion(false); }
+  };
+  const registrarFactura = async (purchaseId, formData) => {
+    try {
+      const result = await apiRequest(`/purchases/${purchaseId}/invoice/`, { method: "POST", body: formData });
+      setRevision((value) => value + 1);
+      setCompraSeleccionada((current) => current ? { ...current, facturaProveedor: {
+        tipo: result.invoice.tipo, numero: result.invoice.numero,
+        fechaEmision: result.invoice.fecha_emision.split("-").reverse().join("/"),
+        montoTotal: Number(result.invoice.monto_total),
+        tieneArchivo: result.invoice.has_file, nombreArchivo: result.invoice.filename || "",
+      } } : current);
+      alert("Factura registrada.");
+      return true;
+    } catch (error) { alert(error.message); }
+    return false;
+  };
+  const descargarFactura = async (purchaseId, filename) => {
+    try {
+      const blob = await apiDownload(`/purchases/${purchaseId}/invoice/file/`);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename || "factura-proveedor";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (error) { alert(error.message); }
   };
   const productOptions = productos.registros;
@@ -227,30 +299,34 @@ export function useCompras({ apiRequest, apiDownload, logueado, seccion, esAdmin
       agregarProductoCompra, busquedaCompras, busquedaProductoCompra, busquedaProveedorCompra,
       calcularTotalCompra: (purchase) => Number(purchase.total ?? obtenerLotesCompra(purchase).reduce((total, lot) => total + lot.precioUnitario * lot.cantidad, 0)),
       cambiarCantidadProductoCompra: (index, change) => setCarritoCompra((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, cantidad: Math.max(1, item.cantidad + change) } : item)),
-      cancelarCompra, cargandoCompras: historial.cargando, cargandoDetalleProveedorCompra,
-      cargandoProductosCompra: productos.cargando, cargandoProveedores, carritoCompra, compraCancelando,
-      compraSeleccionada, compraVerificando, ordenCompraPdf, cargandoOrdenCompraPdf,
+      cargandoCompras: historial.cargando, cargandoDetalleProveedorCompra,
+      cargandoProductosCompra: productos.cargando, cargandoProveedores, carritoCompra,
+      compraSeleccionada, compraVerificando, recepcionProductos, observacionesRecepcion,
+      guardandoRecepcion, ordenCompraPdf, cargandoOrdenCompraPdf,
       compras: historial.registros, comprasFiltradas: historial.registros,
-      errorCompras: historial.error, esAdministrador, cargarProveedores, errorProveedores, fechasVencimiento,
+      errorCompras: historial.error, esAdministrador, cargarProveedores, errorProveedores,
       mostrarCompra, nuevaCompra, ordenCompraDefaults, proveedorCompraDetalle, setProveedorCompraDetalle,
       obtenerCodigoCompra: (purchase) => `OC-${String(purchase.idCompra ?? Number(String(purchase.id).replace(/^(OC|CPA)-/, ""))).padStart(6, "0")}`,
       obtenerCodigoLote: (lot) => `LT-${lot.idLote ?? Number(String(lot.id).replace("LT-", ""))}`,
-      obtenerEstadoCompra: (purchase) => purchase.estado || "Pendiente de entrega",
+      obtenerEstadoCompra: (purchase) => purchase.estado || "Pendiente",
       obtenerLotesCompra, paginaCompras: historial.pagina, paginaProductosCompra: productos.pagina,
       productoSeleccionadoCompra: productOptions.find((item) => item.id === Number(nuevaCompra.productoId)),
       productosCompraFiltrados: productOptions, proveedores,
       proveedoresFiltrados: proveedores.filter((provider) => provider.name.toLowerCase().includes(busquedaProveedorCompra.toLowerCase())),
-      registrarCompra, verOrdenCompraPDF, cerrarVistaPreviaOrden, abrirNuevaCompra, cerrarNuevaCompra, seleccionarProveedorCompra,
+      registrarCompra, verOrdenCompraPDF, cerrarVistaPreviaOrden, registrarRecepcion,
+      prepararRecepcionCompra, actualizarRecepcionProducto, cancelarRecepcion,
+      registrarFactura, descargarFactura,
+      abrirNuevaCompra, cerrarNuevaCompra, seleccionarProveedorCompra,
       resumenDashboard, seccion, setBusquedaCompras,
       setBusquedaProductoCompra: actualizarBusquedaProductoCompra, setMostrarCompra: cambiarMostrarCompra,
-      setBusquedaProveedorCompra, setCarritoCompra, setCompraCancelando, setCompraSeleccionada,
-      setCompraVerificando, setFechasVencimiento, setNuevaCompra, setPaginaCompras: historial.setPagina,
+      setBusquedaProveedorCompra, setCarritoCompra, setCompraSeleccionada,
+      setCompraVerificando, setObservacionesRecepcion, setNuevaCompra, setPaginaCompras: historial.setPagina,
       setPaginaProductosCompra: productos.setPagina, setProductosCompraOpciones: productos.setRegistros,
       setTotalProductosCompraOpciones: productos.setTotal,
       totalCarritoCompra: subtotalCarritoCompra, subtotalCarritoCompra, porcentajeIgvCompra,
       igvCarritoCompra, totalFinalCompra: totalCarritoCompra,
       totalCompras, totalComprasRegistros: historial.total,
-      totalProductosCompraOpciones: productos.total, validarCompra,
+      totalProductosCompraOpciones: productos.total,
     },
   };
 }

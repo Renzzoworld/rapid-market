@@ -125,6 +125,49 @@ class Lotes(models.Model):
         models.CheckConstraint(condition=models.Q(cantidad_actual__gte=0), name='chk_lote_cantidad_actual'),
 ]
 
+
+class RecepcionCompra(models.Model):
+    RESULTADOS = [('Recibido', 'Recibido'), ('Parcialmente entregado', 'Parcialmente entregado'), ('Rechazado', 'Rechazado')]
+    compra = models.OneToOneField(Compras, on_delete=models.PROTECT, db_column='id_compra', related_name='recepcion')
+    fecha_recepcion = models.DateTimeField(db_default=Now())
+    resultado = models.CharField(max_length=24, choices=RESULTADOS)
+    observaciones = models.TextField(blank=True, default='')
+    registrado_por = models.ForeignKey(settings.AUTH_USER_MODEL, models.PROTECT, db_column='id_usuario')
+
+    class Meta:
+        managed = True
+        db_table = 'recepciones_compra'
+
+
+class DetalleRecepcionCompra(models.Model):
+    recepcion = models.ForeignKey(RecepcionCompra, on_delete=models.CASCADE, db_column='id_recepcion', related_name='detalles')
+    detalle_compra = models.ForeignKey(DetalleCompras, on_delete=models.PROTECT, db_column='id_detalle_compra')
+    cantidad_recibida = models.DecimalField(max_digits=12, decimal_places=3)
+    conforme = models.BooleanField(default=True)
+    motivo_rechazo = models.CharField(max_length=250, blank=True, default='')
+    fecha_vencimiento = models.DateField(blank=True, null=True)
+
+    class Meta:
+        managed = True
+        db_table = 'detalle_recepcion_compra'
+        constraints = [models.UniqueConstraint(fields=['recepcion', 'detalle_compra'], name='uq_recepcion_detalle_compra')]
+
+
+class FacturaProveedor(models.Model):
+    TIPOS = [('Factura', 'Factura'), ('Boleta', 'Boleta'), ('Otro', 'Otro')]
+    compra = models.OneToOneField(Compras, on_delete=models.PROTECT, db_column='id_compra', related_name='factura_proveedor')
+    tipo = models.CharField(max_length=12, choices=TIPOS, default='Factura')
+    numero = models.CharField(max_length=50)
+    fecha_emision = models.DateField()
+    monto_total = models.DecimalField(max_digits=12, decimal_places=2)
+    archivo = models.FileField(upload_to='facturas_proveedor/%Y/%m/', blank=True, default='')
+    registrado_en = models.DateTimeField(db_default=Now())
+    registrado_por = models.ForeignKey(settings.AUTH_USER_MODEL, models.PROTECT, db_column='id_usuario')
+
+    class Meta:
+        managed = True
+        db_table = 'facturas_proveedor'
+
 class MetodosPago(models.Model):
     nombre = models.CharField(unique=True, max_length=30)
     activo = models.BooleanField(default=True,db_default=True)
