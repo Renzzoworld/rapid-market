@@ -41,6 +41,10 @@ htmlcov/
 *.sln
 *.sw?
 
-#ignore media content except .gitkeep
+#ignore media content an subcarpets content except .gitkeep
 media/*
+!media/*/
+media/**/*
 !media/.gitkeep
+!media/**/.gitkeep
+
