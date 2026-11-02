@@ -95,8 +95,8 @@ def dashboard_summary(user_id=None, include_financials=True):
         purchases = one("""
             SELECT COUNT(*) AS purchase_count,
                    COALESCE(SUM(CASE
-                       WHEN rc.resultado = 'Recibido' THEN c.total
-                       WHEN rc.resultado = 'Parcialmente entregado' THEN COALESCE((
+                       WHEN COALESCE(rc.resultado, ec.nombre) = 'Recibido' THEN c.total
+                       WHEN COALESCE(rc.resultado, ec.nombre) = 'Parcialmente entregado' THEN COALESCE((
                            SELECT ROUND(
                                COALESCE(SUM(drc.cantidad_recibida * dc.precio_unitario), 0)
                                * (1 + COALESCE(c.igv_porcentaje, 0) / 100),
@@ -106,10 +106,10 @@ def dashboard_summary(user_id=None, include_financials=True):
                            JOIN detalle_compras dc ON dc.id = drc.id_detalle_compra
                            WHERE drc.id_recepcion = rc.id AND drc.conforme = true
                        ), 0)
-                       WHEN rc.resultado = 'Rechazado' THEN 0
-                       ELSE c.total
+                       ELSE 0
                    END), 0) AS total
             FROM compras c
+            JOIN estados_compra ec ON ec.id = c.id_estado
             LEFT JOIN recepciones_compra rc ON rc.id_compra = c.id
         """)
         summary.update({
