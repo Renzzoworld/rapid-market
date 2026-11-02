@@ -33,7 +33,7 @@ class Command(BaseCommand):
         )
         seed = {
             "unidades_medida": [("Unidad", "unidad"), ("Kilogramo", "kg"), ("Caja", "caja"), ("Paquete", "paquete"), ("Litro", "L")],
-            "estados_compra": [("Pendiente",), ("Parcialmente entregado",), ("Recibido",), ("Rechazado",)],
+            "estados_compra": [("Pendiente",), ("Parcialmente entregado",), ("Recibido",), ("Rechazado",), ("Cancelado",)],
             "metodos_pago": [("Efectivo",), ("Yape",), ("Plin",), ("Tarjeta",)],
             "tipos_venta": [("Minorista", 0), ("Mayorista", 5)],
             "categorias_gasto": [("Operativo",), ("Servicios",), ("Transporte",), ("Personal",), ("Otros",)],

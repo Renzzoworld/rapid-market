@@ -11,7 +11,7 @@ from ...compartido.api_base import AdminWriteMixin
 from ...compartido.serializers import CompraSerializer, FacturaProveedorSerializer, RecepcionCompraSerializer
 from ...models import ConfiguracionTributaria, EmpresaCompradora, FacturaProveedor
 from .documentos import generar_pdf_orden_compra
-from .repositorio import list_purchases
+from .repositorio import last_provider_product_price, list_purchases
 
 
 class PurchaseOrderDefaultsView(AdminWriteMixin, APIView):
@@ -54,6 +54,23 @@ class PurchaseOrderPDFView(AdminWriteMixin, APIView):
         return response
 
 
+class PurchaseLastPriceView(AdminWriteMixin, APIView):
+    admin_methods = {"GET"}
+
+    def get(self, request):
+        provider_id = request.query_params.get("provider_id")
+        product_id = request.query_params.get("product_id")
+        if provider_id is None or product_id is None:
+            return Response({"detail": "provider_id y product_id son obligatorios."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            provider_id = int(provider_id)
+            product_id = int(product_id)
+        except (TypeError, ValueError):
+            return Response({"detail": "provider_id y product_id deben ser enteros válidos."}, status=status.HTTP_400_BAD_REQUEST)
+        price = last_provider_product_price(provider_id, product_id)
+        return Response({"last_price": float(price) if price is not None else None})
+
+
 class PurchasesView(AdminWriteMixin, APIView):
     admin_methods = {"GET", "POST"}
 
@@ -70,6 +87,11 @@ class PurchaseActionView(AdminWriteMixin, APIView):
     admin_methods = {"POST"}
 
     def post(self, request, purchase_id, action):
+        if action == "cancel":
+            result, error, response_status = procesar_accion_compra(purchase_id, action, {}, request.user)
+            if error:
+                return Response(error, status=response_status)
+            return Response(result, status=response_status)
         if action != "receive":
             return Response({"detail": "Acción no válida."}, status=status.HTTP_404_NOT_FOUND)
         serializador = RecepcionCompraSerializer(data=request.data)

@@ -133,6 +133,12 @@ def procesar_accion_compra(purchase_id, action, payload, user):
     purchase = lock_purchase(purchase_id)
     if not purchase:
         return None, {"detail": "Compra no encontrada."}, 404
+    if action == "cancel":
+        if purchase["state"] != "Pendiente":
+            raise ValidationError({"detail": "Solo se puede cancelar una compra pendiente."})
+        state = purchase_state_id("Cancelado")
+        set_purchase_state(purchase_id, state["id"])
+        return list_purchases(purchase_id=purchase_id)[0], None, 200
     if purchase["state"] != "Pendiente":
         raise ValidationError({"detail": "Solo se puede modificar una compra pendiente."})
     if action == "receive":
@@ -147,24 +153,32 @@ def procesar_accion_compra(purchase_id, action, payload, user):
 
         reviewed = []
         accepted_count = 0
+        quantity_mismatch = False
         for line in lines:
             item = by_id[line["id"]]
             quantity = item["received_quantity"]
             rejection_reason = item.get("motivo_rechazo", "").strip()
+            if quantity > line["ordered_quantity"]:
+                raise ValidationError({"items": "La cantidad recibida no puede superar la cantidad solicitada."})
             if not item["conforme"] and not rejection_reason:
                 raise ValidationError({"items": "Indica por qué se rechaza cada producto observado."})
             reasons = []
-            quantity_matches = quantity == line["ordered_quantity"]
-            if not quantity_matches:
-                reasons.append("La cantidad recibida no coincide con la solicitada.")
+            quantity_received = quantity <= line["ordered_quantity"]
             expiry = item.get("expiry_date")
-            if line["perecible"] and item["conforme"] and quantity_matches and not expiry:
+            if line["perecible"] and item["conforme"] and quantity_received and not expiry:
                 raise ValidationError({"items": "Indica el vencimiento de cada producto perecible conforme."})
             if line["perecible"] and expiry and expiry < timezone.localdate():
                 reasons.append("El producto tiene fecha de vencimiento pasada.")
-            line_conforms = item["conforme"] and not reasons
+            if not item["conforme"] and not rejection_reason:
+                raise ValidationError({"items": "Indica por qué se rechaza cada producto observado."})
+            if not item["conforme"]:
+                if not quantity_received:
+                    raise ValidationError({"items": "No puedes rechazar un producto con una cantidad mayor a la solicitada."})
+            line_conforms = item["conforme"] and quantity_received and not reasons
             if line_conforms:
                 accepted_count += 1
+            if item["conforme"] and quantity != line["ordered_quantity"]:
+                quantity_mismatch = True
             reviewed.append({
                 "detail_id": line["id"], "quantity": quantity,
                 "conforme": line_conforms,
@@ -172,9 +186,9 @@ def procesar_accion_compra(purchase_id, action, payload, user):
                 "expiry": expiry,
             })
 
-        if accepted_count == len(lines):
+        if accepted_count == len(lines) and not quantity_mismatch:
             result = "Recibido"
-        elif accepted_count:
+        elif accepted_count or quantity_mismatch:
             result = "Parcialmente entregado"
         else:
             result = "Rechazado"

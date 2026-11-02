@@ -48,13 +48,14 @@ export const mapearCompra = (purchase) => ({
       fechaVencimiento: fechaVista(item.expiry_date),
     })),
   } : null,
+  displayTotal: Number(purchase.display_total ?? purchase.total ?? 0),
   facturaProveedor: purchase.invoice ? {
     tipo: purchase.invoice.tipo, numero: purchase.invoice.numero,
     fechaEmision: fechaVista(purchase.invoice.fecha_emision),
     montoTotal: Number(purchase.invoice.monto_total),
     tieneArchivo: purchase.invoice.has_file, nombreArchivo: purchase.invoice.filename || "",
   } : null,
-  costo: Number(purchase.total), estado: purchase.state,
+  costo: Number(purchase.total), estado: purchase.receipt?.result || purchase.state || "Pendiente",
   lotes: purchase.items.map((item) => ({
     idLote: item.lot_id, idDetalle: item.detail_id, idProducto: item.product_id,
     fecha: fechaVista(purchase.fecha), producto: item.name, cantidad: Number(item.quantity),

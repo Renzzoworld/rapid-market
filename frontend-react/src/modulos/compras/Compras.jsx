@@ -10,7 +10,8 @@ const fechaHoyLocal = () => {
 
 export function Compras() {
   const { estadoCompras } = useContextoAplicacion();
-  const { abrirNuevaCompra, busquedaCompras, cargandoCompras, comprasFiltradas, errorCompras, esAdministrador, obtenerCodigoCompra, obtenerEstadoCompra, obtenerLotesCompra, paginaCompras, prepararRecepcionCompra, resumenDashboard, seccion, setBusquedaCompras, setCompraSeleccionada, setPaginaCompras, totalCompras, totalComprasRegistros } = estadoCompras;
+  const { abrirNuevaCompra, busquedaCompras, cargandoCompras, compraCancelando, comprasFiltradas, confirmacionCancelacion, cancelandoCompra, errorCompras, esAdministrador, obtenerCodigoCompra, obtenerCodigoLote, obtenerEstadoCompra, obtenerLotesCompra, paginaCompras, prepararRecepcionCompra, resumenDashboard, seccion, setBusquedaCompras, setCompraSeleccionada, setPaginaCompras, totalCompras, totalComprasRegistros, iniciarCancelacionCompra, cancelarCompraConfirmada, cerrarCancelacionCompra, verOrdenCompraPDF, cargandoOrdenCompraPdf } = estadoCompras;
+  const [compraRecepcionMostrando, setCompraRecepcionMostrando] = useState(null);
 
   return (
     <>
@@ -74,7 +75,7 @@ export function Compras() {
                       <th>Cantidad de lotes</th>
                       <th>Total (IGV incluido)</th>
                       <th>Estado</th>
-                      <th>Detalles</th>
+                      <th>Orden</th>
                       <th>Recepción</th>
                     </tr>
                   </thead>
@@ -101,7 +102,7 @@ export function Compras() {
                         <td>{compra.proveedor}</td>
                         <td>{obtenerLotesCompra(compra).length}</td>
                         <td>
-                          S/ {compra.costo.toFixed(2)}
+                          S/ {Number(compra.displayTotal ?? compra.costo ?? 0).toFixed(2)}
                         </td>
                         <td>
                           <span className={`purchase-status ${obtenerEstadoCompra(compra).toLowerCase().replaceAll(" ", "-")}`}>
@@ -112,20 +113,43 @@ export function Compras() {
                           <button
                             type="button"
                             className="details-button"
-                            onClick={() => setCompraSeleccionada(compra)}
+                            disabled={cargandoOrdenCompraPdf}
+                            onClick={() => verOrdenCompraPDF(compra)}
                           >
-                            <span aria-hidden="true">👁</span> Detalles
+                            <span aria-hidden="true">📄</span> {cargandoOrdenCompraPdf ? "Preparando PDF..." : "Ver orden de compra PDF"}
                           </button>
                         </td>
                         <td>
-                          <button
-                            type="button"
-                            className="details-button"
-                            disabled={obtenerEstadoCompra(compra) !== "Pendiente"}
-                            onClick={() => prepararRecepcionCompra(compra)}
-                          >
-                            Registrar recepción
-                          </button>
+                          <div className="purchase-row-actions">
+                            {compra.recepcion ? (
+                              <button
+                                type="button"
+                                className="details-button secondary-button"
+                                onClick={() => setCompraRecepcionMostrando(compra)}
+                              >
+                                Ver registro de recepción
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  className="details-button"
+                                  disabled={obtenerEstadoCompra(compra) !== "Pendiente"}
+                                  onClick={() => prepararRecepcionCompra(compra)}
+                                >
+                                  Registrar recepción
+                                </button>
+                                <button
+                                  type="button"
+                                  className="details-button secondary-button"
+                                  disabled={obtenerEstadoCompra(compra) !== "Pendiente"}
+                                  onClick={() => iniciarCancelacionCompra(compra)}
+                                >
+                                  Cancelar orden de compra
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </td>
 
                       </tr>
@@ -142,6 +166,72 @@ export function Compras() {
             </div>
           </>
         )}
+
+        {compraCancelando && (
+          <div className="modal-overlay">
+            <div className="modal-card purchase-confirmation-modal">
+              <div className="modal-header">
+                <div>
+                  <h2>Cancelar orden de compra</h2>
+                </div>
+                <button type="button" className="modal-close" onClick={cerrarCancelacionCompra} aria-label="Cerrar confirmación de cancelación">×</button>
+              </div>
+              <p>{confirmacionCancelacion || "¿Estás seguro de cancelar la orden de compra?"}</p>
+              <div className="modal-actions">
+                <button type="button" className="secondary-button" onClick={cerrarCancelacionCompra} disabled={cancelandoCompra}>No</button>
+                <button type="button" className="primary-button" onClick={cancelarCompraConfirmada} disabled={cancelandoCompra}>
+                  {cancelandoCompra ? "Cancelando..." : "Sí"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+          {compraRecepcionMostrando && (() => {
+            const recepcion = compraRecepcionMostrando.recepcion || null;
+            const itemsRecepcion = recepcion?.items || [];
+            return (
+              <div className="modal-overlay">
+                <div className="modal-card sale-details-modal purchase-details-modal">
+                  <div className="modal-header">
+                    <div>
+                      <h2>Registro de recepción</h2>
+                      <p>{obtenerCodigoCompra(compraRecepcionMostrando)}</p>
+                    </div>
+                    <button type="button" className="modal-close" onClick={() => setCompraRecepcionMostrando(null)} aria-label="Cerrar registro de recepción">×</button>
+                  </div>
+                  <section className="purchase-record-section">
+                    <p><strong>Proveedor:</strong> {compraRecepcionMostrando.proveedor}</p>
+                    <p><strong>Resultado:</strong> <span className={`purchase-status ${(recepcion?.resultado || "").toLowerCase().replaceAll(" ", "-") || "pendiente"}`}>{recepcion?.resultado || "Sin resultado"}</span></p>
+                    <p><strong>Fecha solicitada:</strong> {compraRecepcionMostrando.fechaEntregaRequerida || "—"}</p>
+                    <p><strong>Fecha recibida:</strong> {recepcion?.fecha || "—"}</p>
+                    <div className="table-container purchase-record-table"><table><thead><tr><th>Lote</th><th>Producto</th><th>Cantidad recibida</th><th>Precio unitario</th><th>Subtotal</th><th>Total final (IGV)</th><th>Revisión</th><th>Detalle</th><th>Vencimiento</th></tr></thead><tbody>
+                      {itemsRecepcion.map((item) => {
+                        const lot = obtenerLotesCompra(compraRecepcionMostrando).find((entry) => entry.idDetalle === item.idDetalle);
+                        const subtotal = Number(item.cantidadRecibida || 0) * Number(lot?.precioUnitario || 0);
+                        const totalConIgv = subtotal * (1 + (Number(compraRecepcionMostrando.igvPorcentaje || 0) / 100));
+                        return <tr key={item.idDetalle ?? `${lot?.idLote ?? "lot"}-${Math.random()}`}>
+                          <td>{lot ? obtenerCodigoLote(lot) : "—"}</td>
+                          <td><strong>{lot?.producto || "Producto"}</strong></td>
+                          <td>{item.cantidadRecibida ?? "—"}</td>
+                          <td>S/ {Number(lot?.precioUnitario || 0).toFixed(2)}</td>
+                          <td>S/ {subtotal.toFixed(2)}</td>
+                          <td>S/ {totalConIgv.toFixed(2)}</td>
+                          <td>{item.conforme ? "Recibido" : "Rechazado"}</td>
+                          <td>{item.motivoRechazo || (item.conforme ? "" : "—")}</td>
+                          <td>{item.fechaVencimiento || "—"}</td>
+                        </tr>;
+                      })}
+                    </tbody></table></div>
+                    {!itemsRecepcion.length && <p className="empty-state">No hay registros de recepción para esta compra.</p>}
+                    {recepcion?.observaciones && <p><strong>Observaciones:</strong> {recepcion.observaciones}</p>}
+                  </section>
+                  <div className="modal-actions">
+                    <button type="button" className="primary-button" onClick={() => setCompraRecepcionMostrando(null)}>Cerrar</button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
     </>
   );
 }
@@ -244,11 +334,24 @@ export function DetalleCompra() {
               <section className="purchase-record-section">
                 <h3>Registro de recepción</h3>
                 <p><strong>Resultado:</strong> <span className={`purchase-status ${compraSeleccionada.recepcion.resultado.toLowerCase().replaceAll(" ", "-")}`}>{compraSeleccionada.recepcion.resultado}</span></p>
-                <p><strong>Fecha:</strong> {compraSeleccionada.recepcion.fecha}</p>
-                <div className="table-container purchase-record-table"><table><thead><tr><th>Producto</th><th>Cantidad recibida</th><th>Revisión</th><th>Detalle</th></tr></thead><tbody>
+                <p><strong>Fecha solicitada:</strong> {compraSeleccionada.fechaEntregaRequerida || "—"}</p>
+                <p><strong>Fecha recibida:</strong> {compraSeleccionada.recepcion.fecha}</p>
+                <div className="table-container purchase-record-table"><table><thead><tr><th>Lote</th><th>Producto</th><th>Cantidad recibida</th><th>Precio unitario</th><th>Subtotal</th><th>Total final (IGV)</th><th>Revisión</th><th>Detalle</th><th>Vencimiento</th></tr></thead><tbody>
                   {compraSeleccionada.recepcion.items.map((item) => {
                     const lot = obtenerLotesCompra(compraSeleccionada).find((entry) => entry.idDetalle === item.idDetalle);
-                    return <tr key={item.idDetalle}><td>{lot?.producto || "Producto"}</td><td>{item.cantidadRecibida}</td><td>{item.conforme ? "Conforme" : "Rechazado"}</td><td>{item.motivoRechazo || item.fechaVencimiento || "—"}</td></tr>;
+                    const subtotal = Number(item.cantidadRecibida || 0) * Number(lot?.precioUnitario || 0);
+                    const totalConIgv = subtotal * (1 + (Number(compraSeleccionada.igvPorcentaje || 0) / 100));
+                    return <tr key={item.idDetalle}>
+                      <td>{lot ? obtenerCodigoLote(lot) : "—"}</td>
+                      <td><strong>{lot?.producto || "Producto"}</strong></td>
+                      <td>{item.cantidadRecibida}</td>
+                      <td>S/ {Number(lot?.precioUnitario || 0).toFixed(2)}</td>
+                      <td>S/ {subtotal.toFixed(2)}</td>
+                      <td>S/ {totalConIgv.toFixed(2)}</td>
+                      <td>{item.conforme ? "Recibido" : "Rechazado"}</td>
+                      <td>{item.motivoRechazo || (item.conforme ? "" : "—")}</td>
+                      <td>{item.fechaVencimiento || "—"}</td>
+                    </tr>;
                   })}
                 </tbody></table></div>
                 {compraSeleccionada.recepcion.observaciones && <p><strong>Observaciones:</strong> {compraSeleccionada.recepcion.observaciones}</p>}
@@ -322,9 +425,13 @@ export function VerificarCompra() {
               <span>{obtenerCodigoCompra(compraVerificando)}</span>
               <strong>Proveedor</strong>
               <span>{compraVerificando.proveedor}</span>
+              <strong>Fecha requerida de entrega</strong>
+              <span>{compraVerificando.fechaEntregaRequerida || "—"}</span>
+              <strong>Fecha actual</strong>
+              <span>{fechaHoyLocal().split("-").reverse().join("/")}</span>
             </div>
 
-            <p className="receipt-instructions">Revisa cada producto y registra la cantidad recibida. Si un producto está dañado, vencido o no corresponde, marca “Rechazar esta entrega”. En ese caso se rechazará toda la orden y no ingresará ningún producto al inventario.</p>
+            
             {errorRecepcion && <p className="field-error" role="alert">{errorRecepcion}</p>}
             {confirmacionRecepcion && <p className="receipt-confirmation" role="status">{confirmacionRecepcion}</p>}
             <div className="table-container purchase-receipt-table">
@@ -337,7 +444,7 @@ export function VerificarCompra() {
                       <td><strong>{lote.producto}</strong><small>{obtenerCodigoLote(lote)}</small></td>
                       <td>{lote.cantidad}</td>
                       <td><input type="number" min="0" step="0.001" required aria-label={`Cantidad recibida de ${lote.producto}`} value={receipt.receivedQuantity ?? ""} onChange={(event) => actualizarRecepcionProducto(lote.idDetalle, { receivedQuantity: event.target.value })} /></td>
-                      <td><select required aria-label={`Resultado de revisión de ${lote.producto}`} value={receipt.conforme ?? ""} onChange={(event) => actualizarRecepcionProducto(lote.idDetalle, { conforme: event.target.value })}><option value="">Seleccionar</option><option value="true">Conforme</option><option value="false">Rechazar esta entrega</option></select>
+                      <td><select required aria-label={`Resultado de revisión de ${lote.producto}`} value={receipt.conforme ?? ""} onChange={(event) => actualizarRecepcionProducto(lote.idDetalle, { conforme: event.target.value })}><option value="">Seleccionar</option><option value="true">Recibido</option><option value="false">Rechazar esta entrega</option></select>
                         {receipt.conforme === "false" && <input className="receipt-rejection-reason" maxLength="250" required placeholder="Motivo del rechazo" value={receipt.motivoRechazo || ""} onChange={(event) => actualizarRecepcionProducto(lote.idDetalle, { motivoRechazo: event.target.value })} />}
                       </td>
                       <td>{lote.perecible ? <input type="date" aria-label={`Vencimiento de ${lote.producto}`} value={receipt.expiryDate || ""} onChange={(event) => actualizarRecepcionProducto(lote.idDetalle, { expiryDate: event.target.value })} /> : "No aplica"}</td>
@@ -364,7 +471,7 @@ export function FormularioCompra() {
   const { estadoCompras } = useContextoAplicacion();
   const {
     agregarProductoCompra, busquedaProductoCompra, busquedaProveedorCompra,
-    cambiarCantidadProductoCompra, cargandoProductosCompra, cargandoProveedores,
+    cambiarCantidadProductoCompra, cargarPrecioProductoProveedor, cargandoProductosCompra, cargandoProveedores,
     cargandoDetalleProveedorCompra, carritoCompra, errorProveedores, mostrarCompra,
     nuevaCompra, ordenCompraDefaults, proveedorCompraDetalle, paginaProductosCompra,
     productoSeleccionadoCompra, productosCompraFiltrados, proveedoresFiltrados,
@@ -413,8 +520,8 @@ export function FormularioCompra() {
 
               <fieldset className="provider-form-section purchase-section"><legend>Productos</legend>
                 <div className="form-group"><label>Producto {nuevaCompra.proveedor && <small>(categorías del proveedor)</small>}</label><div className="product-autocomplete">
-                  <input type="text" placeholder={nuevaCompra.providerId ? "Escribe para buscar un producto" : "Primero selecciona un proveedor"} disabled={!nuevaCompra.providerId} value={busquedaProductoCompra} onChange={(event) => { setBusquedaProductoCompra(event.target.value); setProductosCompraOpciones([]); setTotalProductosCompraOpciones(0); setPaginaProductosCompra(1); setNuevaCompra({ ...nuevaCompra, productoId: "" }); }} />
-                  {busquedaProductoCompra.trim() && !productoSeleccionadoCompra && <SugerenciasProductos productos={productosCompraFiltrados} cargando={cargandoProductosCompra} pagina={paginaProductosCompra} cantidad={totalProductosCompraOpciones} alCambiar={setPaginaProductosCompra} alSeleccionar={(producto) => { setBusquedaProductoCompra(producto.nombre); setNuevaCompra({ ...nuevaCompra, productoId: producto.id, precioUnitario: "" }); }} />}
+                  <input type="text" placeholder={nuevaCompra.providerId ? "Escribe para buscar un producto" : "Primero selecciona un proveedor"} disabled={!nuevaCompra.providerId} value={busquedaProductoCompra} onChange={(event) => { setBusquedaProductoCompra(event.target.value); setProductosCompraOpciones([]); setTotalProductosCompraOpciones(0); setPaginaProductosCompra(1); setNuevaCompra({ ...nuevaCompra, productoId: "", precioUnitario: "" }); }} />
+                  {busquedaProductoCompra.trim() && !productoSeleccionadoCompra && <SugerenciasProductos productos={productosCompraFiltrados} cargando={cargandoProductosCompra} pagina={paginaProductosCompra} cantidad={totalProductosCompraOpciones} alCambiar={setPaginaProductosCompra} alSeleccionar={(producto) => { setBusquedaProductoCompra(producto.nombre); cargarPrecioProductoProveedor(nuevaCompra.providerId, producto.id); }} />}
                 </div></div>
                 <div className="sale-quantity-row"><div><label htmlFor="purchase-quantity">Cantidad</label><input id="purchase-quantity" type="number" min="0.001" step="0.001" value={nuevaCompra.cantidad} onChange={(event) => setNuevaCompra({ ...nuevaCompra, cantidad: event.target.value })} /></div>
                   <div><label htmlFor="purchase-unit-price">Precio unitario sin IGV</label><input id="purchase-unit-price" type="number" min="0.01" step="0.01" placeholder="Ej. 1.80" value={nuevaCompra.precioUnitario} disabled={!productoSeleccionadoCompra} onChange={(event) => setNuevaCompra({ ...nuevaCompra, precioUnitario: event.target.value })} /></div>

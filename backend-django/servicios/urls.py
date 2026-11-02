@@ -2,7 +2,7 @@ from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views import APIIndexView
 from .modulos.autenticacion.vistas import LoginView, LogoutView
-from .modulos.compras.vistas import PurchaseActionView, PurchaseInvoiceFileView, PurchaseInvoiceView, PurchaseOrderDefaultsView, PurchaseOrderPDFView, PurchasesView
+from .modulos.compras.vistas import PurchaseActionView, PurchaseInvoiceFileView, PurchaseInvoiceView, PurchaseLastPriceView, PurchaseOrderDefaultsView, PurchaseOrderPDFView, PurchasesView
 from .modulos.gastos.vistas import ExpensesView
 from .modulos.inventario.vistas import ProductDetailView, ProductListView
 from .modulos.proveedores.vistas import CanalProveedorDetailView, CanalesProveedorView, CatalogosProveedorView, ContactoProveedorDetailView, ContactosProveedorView, ProviderDetailView, ProvidersManagementView
@@ -27,6 +27,7 @@ urlpatterns = [
     path('products/', ProductListView.as_view(), name='products'),
     path('products/<int:product_id>/', ProductDetailView.as_view(), name='product_detail'),
     path('sales/', SalesView.as_view(), name='sales'),
+    path('purchases/last-price/', PurchaseLastPriceView.as_view(), name='purchase_last_price'),
     path('purchases/', PurchasesView.as_view(), name='purchases'),
     path('purchases/order-defaults/', PurchaseOrderDefaultsView.as_view(), name='purchase_order_defaults'),
     path('purchases/<int:purchase_id>/order-pdf/', PurchaseOrderPDFView.as_view(), name='purchase_order_pdf'),

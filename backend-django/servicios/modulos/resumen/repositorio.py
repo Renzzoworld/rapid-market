@@ -95,19 +95,22 @@ def dashboard_summary(user_id=None, include_financials=True):
         purchases = one("""
             SELECT COUNT(*) AS purchase_count,
                    COALESCE(SUM(CASE
-                       WHEN ec.nombre = 'Recibido' THEN c.total
-                       WHEN ec.nombre = 'Parcialmente entregado' THEN COALESCE((
-                           SELECT ROUND(SUM(ROUND(dr.cantidad_recibida * dc.precio_unitario, 2))
-                               + SUM(ROUND(dr.cantidad_recibida * dc.precio_unitario, 2))
-                                 * COALESCE(c.igv_porcentaje, 0) / 100, 2)
-                           FROM recepciones_compra rc
-                           JOIN detalle_recepcion_compra dr ON dr.id_recepcion = rc.id
-                           JOIN detalle_compras dc ON dc.id = dr.id_detalle_compra
-                           WHERE rc.id_compra = c.id AND dr.conforme = true
+                       WHEN rc.resultado = 'Recibido' THEN c.total
+                       WHEN rc.resultado = 'Parcialmente entregado' THEN COALESCE((
+                           SELECT ROUND(
+                               COALESCE(SUM(drc.cantidad_recibida * dc.precio_unitario), 0)
+                               * (1 + COALESCE(c.igv_porcentaje, 0) / 100),
+                               2
+                           )
+                           FROM detalle_recepcion_compra drc
+                           JOIN detalle_compras dc ON dc.id = drc.id_detalle_compra
+                           WHERE drc.id_recepcion = rc.id AND drc.conforme = true
                        ), 0)
-                       ELSE 0 END), 0) AS total
+                       WHEN rc.resultado = 'Rechazado' THEN 0
+                       ELSE c.total
+                   END), 0) AS total
             FROM compras c
-            JOIN estados_compra ec ON ec.id = c.id_estado
+            LEFT JOIN recepciones_compra rc ON rc.id_compra = c.id
         """)
         summary.update({
             "cost_of_goods_sold": costs["total"],

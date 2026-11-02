@@ -1,7 +1,10 @@
+from decimal import Decimal
+
 from django.db import connection
 import json
 from pathlib import PurePath
 
+from ...models import EstadosCompra
 from ...compartido.repositorio_base import one, rows
 
 PAGE_SIZE = 10
@@ -51,6 +54,18 @@ def provider_category_ids(provider_id):
     return result["category_ids"] if result else []
 
 
+def last_provider_product_price(provider_id, product_id):
+    result = one("""
+        SELECT dc.precio_unitario AS last_price
+        FROM detalle_compras dc
+        JOIN compras c ON c.id = dc.id_compra
+        WHERE c.id_proveedor = %s AND dc.id_producto = %s
+        ORDER BY c.fecha DESC, dc.id DESC
+        LIMIT 1
+    """, [provider_id, product_id])
+    return result["last_price"] if result else None
+
+
 def create_purchase_detail(purchase_id, product_id, product_name, quantity, unit_price):
     with connection.cursor() as cursor:
         cursor.execute("INSERT INTO detalle_compras (id_compra,id_producto,nombre_producto_snapshot,cantidad,precio_unitario) VALUES (%s,%s,%s,%s,%s) RETURNING id", [purchase_id, product_id, product_name, quantity, unit_price])
@@ -82,7 +97,11 @@ def deliver_lot(detail_id, quantity, expiry):
 
 
 def purchase_state_id(state_name):
-    return one("SELECT id FROM estados_compra WHERE nombre=%s", [state_name])
+    state = one("SELECT id FROM estados_compra WHERE nombre=%s", [state_name])
+    if state is not None:
+        return state
+    estado, _ = EstadosCompra.objects.get_or_create(nombre=state_name)
+    return {"id": estado.pk}
 
 
 def set_purchase_state(purchase_id, state_id):
@@ -169,12 +188,28 @@ def list_purchases(*, page=None, search="", purchase_id=None):
                 FROM detalle_recepcion_compra drc
                 WHERE drc.id_recepcion=%s ORDER BY drc.id_detalle_compra
             """, [purchase["receipt"]["id"]])
+            purchase["state"] = purchase["receipt"]["result"] or purchase["state"]
         purchase["invoice"] = one("""
             SELECT tipo,numero,fecha_emision,monto_total,
                    (archivo <> '') AS has_file,
                    CASE WHEN archivo <> '' THEN regexp_replace(archivo, '^.*/', '') ELSE '' END AS filename
             FROM facturas_proveedor WHERE id_compra=%s
         """, [purchase["id"]])
+        total_subtotal = 0
+        igv_rate = Decimal(str(purchase.get("igv_rate") or 0))
+        for item in purchase["items"]:
+            quantity = Decimal(str(item.get("quantity") or 0))
+            unit_price = Decimal(str(item.get("unit_price") or 0))
+            matched_receipt = None
+            if purchase["receipt"]:
+                matched_receipt = next((entry for entry in purchase["receipt"]["items"] if entry.get("detail_id") == item.get("detail_id")), None)
+            if matched_receipt:
+                if matched_receipt.get("conforme") is False:
+                    continue
+                quantity = Decimal(str(matched_receipt.get("received_quantity") or 0))
+            total_subtotal += quantity * unit_price
+        display_total = total_subtotal * (Decimal("1") + (igv_rate / Decimal("100"))) if purchase["items"] else Decimal(str(purchase.get("total") or 0))
+        purchase["display_total"] = float(display_total.quantize(Decimal("0.01")))
     return purchases
 
 def list_purchase_page(page=1, search=""):

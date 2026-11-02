@@ -10,13 +10,15 @@ from django.core.cache import cache
 from django.db import connection
 from django.test import TestCase
 from django.test import SimpleTestCase
+from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
 from servicios.permissions import IsAdministrator
 from servicios.models import (
-    CategoriasProductos, Compras, DetalleCompras, EstadosCompra,
-    Lotes, Productos, Proveedores, UnidadesMedida,
+    CategoriasProductos, Compras, DetalleCompras, DetalleRecepcionCompra,
+    EstadosCompra, Lotes, Productos, Proveedores, RecepcionCompra,
+    UnidadesMedida,
 )
 from servicios.modulos.autenticacion.vistas import LoginView
 from servicios.modulos.compras.vistas import PurchasesView
@@ -111,6 +113,124 @@ class DjangoAuthenticationTests(TestCase):
         self.user.is_superuser = True
         self.user.save()
         self.assertEqual(self.login().data["user"]["role"], "Administrador")
+
+    def test_cancel_purchase_action_sets_order_to_cancelado(self):
+        self.client.force_authenticate(self.user)
+        categoria = CategoriasProductos.objects.create(nombre="Lácteos")
+        unidad = UnidadesMedida.objects.create(nombre="Unidad", abreviatura="UND")
+        proveedor = Proveedores.objects.create(
+            razon_social="Proveedor cancelado",
+            nombre="proveedor-cancelado",
+            ruc="12345678902",
+            direccion="Calle Falsa 456",
+            activo=True,
+        )
+        producto = Productos.objects.create(
+            nombre="Queso fresco",
+            id_unidad=unidad,
+            precio_venta=Decimal("6.00"),
+            perecible=False,
+            stock_minimo=Decimal("1.000"),
+            activo=True,
+            categoria=categoria,
+        )
+        estado = EstadosCompra.objects.get_or_create(nombre="Pendiente")[0]
+        compra = Compras.objects.create(
+            id_proveedor=proveedor,
+            id_estado=estado,
+            id_usuario=self.user,
+            fecha_entrega_requerida=timezone.now().date(),
+            lugar_entrega="Av. Central 20",
+            proveedor_nombre_comercial="Proveedor cancelado",
+            proveedor_razon_social="Proveedor cancelado",
+            proveedor_ruc=proveedor.ruc,
+            proveedor_correo="ventas@proveedor.com",
+            proveedor_telefono="987654321",
+            responsable_nombre="Ana Test",
+            responsable_rol="Administrador",
+        )
+        DetalleCompras.objects.create(
+            id_compra=compra,
+            id_producto=producto,
+            nombre_producto_snapshot="Queso fresco",
+            cantidad=Decimal("2.000"),
+            precio_unitario=Decimal("8.00"),
+        )
+
+        response = self.client.post(f"/api/purchases/{compra.pk}/cancel/", {}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        compra.refresh_from_db()
+        self.assertEqual(compra.id_estado.nombre, "Cancelado")
+
+    def test_last_price_endpoint_returns_last_provider_product_price(self):
+        self.client.force_authenticate(self.user)
+        categoria = CategoriasProductos.objects.create(nombre="Lácteos")
+        unidad = UnidadesMedida.objects.create(nombre="Unidad", abreviatura="UND")
+        proveedor = Proveedores.objects.create(
+            razon_social="Proveedor de ejemplo",
+            nombre="proveedor-ejemplo",
+            ruc="12345678901",
+            direccion="Calle Falsa 123",
+            activo=True,
+        )
+        producto = Productos.objects.create(
+            nombre="Yogur natural",
+            id_unidad=unidad,
+            precio_venta=Decimal("5.00"),
+            perecible=False,
+            stock_minimo=Decimal("1.000"),
+            activo=True,
+            categoria=categoria,
+        )
+        estado = EstadosCompra.objects.create(nombre="Pendiente")
+        primera_compra = Compras.objects.create(
+            id_proveedor=proveedor,
+            id_estado=estado,
+            id_usuario=self.user,
+            fecha_entrega_requerida=timezone.now().date(),
+            lugar_entrega="Av. Central 10",
+            proveedor_nombre_comercial="Proveedor de ejemplo",
+            proveedor_razon_social="Proveedor de ejemplo",
+            proveedor_ruc=proveedor.ruc,
+            proveedor_correo="ventas@proveedor.com",
+            proveedor_telefono="987654321",
+            responsable_nombre="Ana Test",
+            responsable_rol="Administrador",
+        )
+        DetalleCompras.objects.create(
+            id_compra=primera_compra,
+            id_producto=producto,
+            nombre_producto_snapshot="Yogur natural",
+            cantidad=Decimal("12.000"),
+            precio_unitario=Decimal("7.50"),
+        )
+        segunda_compra = Compras.objects.create(
+            id_proveedor=proveedor,
+            id_estado=estado,
+            id_usuario=self.user,
+            fecha_entrega_requerida=timezone.now().date(),
+            lugar_entrega="Av. Central 10",
+            proveedor_nombre_comercial="Proveedor de ejemplo",
+            proveedor_razon_social="Proveedor de ejemplo",
+            proveedor_ruc=proveedor.ruc,
+            proveedor_correo="ventas@proveedor.com",
+            proveedor_telefono="987654321",
+            responsable_nombre="Ana Test",
+            responsable_rol="Administrador",
+        )
+        DetalleCompras.objects.create(
+            id_compra=segunda_compra,
+            id_producto=producto,
+            nombre_producto_snapshot="Yogur natural",
+            cantidad=Decimal("8.000"),
+            precio_unitario=Decimal("9.25"),
+        )
+
+        response = self.client.get(f"/api/purchases/last-price/?provider_id={proveedor.pk}&product_id={producto.pk}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(float(response.data["last_price"]), 9.25)
 
 
 def fake_user(user_id=19, administrator=False):
@@ -280,6 +400,109 @@ class DjangoBusinessIntegrationTests(TestCase):
 
         self.assertEqual(result["state"], "Recibido")
         self.assertEqual(Lotes.objects.get(id_detalle_compra=detail).cantidad_actual, Decimal("3.000"))
+
+    def test_partial_received_quantity_marks_purchase_as_partially_delivered(self):
+        category = CategoriasProductos.objects.first()
+        provider = Proveedores.objects.create(
+            razon_social="Proveedor parcial", nombre="Proveedor parcial",
+            ruc="20999123457", direccion="Dirección parcial",
+        )
+        provider.categorias.add(category)
+        product = Productos.objects.create(
+            nombre="Producto parcial", id_unidad=UnidadesMedida.objects.first(),
+            precio_venta="9.00", categoria=category,
+        )
+        purchase = Compras.objects.create(
+            id_proveedor=provider, id_estado=EstadosCompra.objects.get(nombre="Pendiente"),
+            id_usuario=self.admin,
+        )
+        detail = DetalleCompras.objects.create(
+            id_compra=purchase, id_producto=product,
+            nombre_producto_snapshot=product.nombre, cantidad="5.000", precio_unitario="4.00",
+        )
+        self.authenticate(self.admin)
+
+        result = self.post(f"/api/purchases/{purchase.pk}/receive/", {
+            "observations": "Recepción parcial",
+            "items": [{
+                "detail_id": detail.pk, "received_quantity": "3.000",
+                "conforme": True, "motivo_rechazo": "", "expiry_date": None,
+            }],
+        }, status=200)
+
+        self.assertEqual(result["state"], "Parcialmente entregado")
+        self.assertEqual(Lotes.objects.get(id_detalle_compra=detail).cantidad_actual, Decimal("3.000"))
+
+    def test_purchase_list_prefers_receipt_result_when_state_is_stale(self):
+        category = CategoriasProductos.objects.first()
+        provider = Proveedores.objects.create(
+            razon_social="Proveedor con estado obsoleto", nombre="Proveedor con estado obsoleto",
+            ruc="20999123459", direccion="Dirección de prueba",
+        )
+        provider.categorias.add(category)
+        product = Productos.objects.create(
+            nombre="Producto con estado obsoleto", id_unidad=UnidadesMedida.objects.first(),
+            precio_venta="12.00", categoria=category,
+        )
+        purchase = Compras.objects.create(
+            id_proveedor=provider, id_estado=EstadosCompra.objects.get(nombre="Recibido"),
+            id_usuario=self.admin, subtotal=Decimal("20.00"), igv_porcentaje=Decimal("18.00"),
+            igv_monto=Decimal("3.60"), total=Decimal("23.60"),
+        )
+        detail = DetalleCompras.objects.create(
+            id_compra=purchase, id_producto=product,
+            nombre_producto_snapshot=product.nombre, cantidad="5.000", precio_unitario="4.00",
+        )
+        receipt = RecepcionCompra.objects.create(
+            compra=purchase, resultado="Parcialmente entregado", observaciones="Recepción parcial antigua",
+            registrado_por=self.admin,
+        )
+        DetalleRecepcionCompra.objects.create(
+            recepcion=receipt, detalle_compra=detail,
+            cantidad_recibida=Decimal("3.000"), conforme=True,
+        )
+        self.authenticate(self.admin)
+
+        response = self.client.get("/api/purchases/")
+        purchase_data = next(item for item in response.data["results"] if item["id"] == purchase.pk)
+
+        self.assertEqual(purchase_data["state"], "Parcialmente entregado")
+        self.assertEqual(float(purchase_data["display_total"]), 14.16)
+
+    def test_purchase_list_shows_partial_received_total_without_changing_original_order_total(self):
+        category = CategoriasProductos.objects.first()
+        provider = Proveedores.objects.create(
+            razon_social="Proveedor total parcial", nombre="Proveedor total parcial",
+            ruc="20999123458", direccion="Dirección de prueba partial",
+        )
+        provider.categorias.add(category)
+        product = Productos.objects.create(
+            nombre="Producto total parcial", id_unidad=UnidadesMedida.objects.first(),
+            precio_venta="12.00", categoria=category,
+        )
+        purchase = Compras.objects.create(
+            id_proveedor=provider, id_estado=EstadosCompra.objects.get(nombre="Pendiente"),
+            id_usuario=self.admin,
+            subtotal=Decimal("20.00"), igv_porcentaje=Decimal("18.00"), igv_monto=Decimal("3.60"), total=Decimal("23.60"),
+        )
+        detail = DetalleCompras.objects.create(
+            id_compra=purchase, id_producto=product,
+            nombre_producto_snapshot=product.nombre, cantidad="5.000", precio_unitario="4.00",
+        )
+        self.authenticate(self.admin)
+
+        self.post(f"/api/purchases/{purchase.pk}/receive/", {
+            "observations": "Recepción parcial con total recalculado",
+            "items": [{
+                "detail_id": detail.pk, "received_quantity": "3.000",
+                "conforme": True, "motivo_rechazo": "", "expiry_date": None,
+            }],
+        }, status=200)
+
+        response = self.client.get("/api/purchases/")
+        purchase_data = next(item for item in response.data["results"] if item["id"] == purchase.pk)
+        self.assertEqual(float(purchase_data["total"]), 23.60)
+        self.assertEqual(float(purchase_data["display_total"]), 14.16)
 
     def test_purchase_delivery_sale_and_expense_reference_django_accounts(self):
         self.authenticate(self.admin)
