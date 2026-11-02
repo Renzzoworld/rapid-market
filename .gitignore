@@ -41,10 +41,9 @@ htmlcov/
 *.sln
 *.sw?
 
-#ignore media content an subcarpets content except .gitkeep
-Media/*
-!Media/*/
-Media/**/*
-!Media/.gitkeep
-!Media/**/.gitkeep
+# Keep the Media folder structure in Git, but ignore uploaded media files.
+/backend-django/Media/**
+!/backend-django/Media/**/
+!/backend-django/Media/**/.gitkeep
+!/backend-django/Media/.gitkeep
 
