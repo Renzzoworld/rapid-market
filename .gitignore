@@ -40,3 +40,7 @@ htmlcov/
 *.njsproj
 *.sln
 *.sw?
+
+#ignore media content except .gitkeep
+media/*
+!media/.gitkeep
