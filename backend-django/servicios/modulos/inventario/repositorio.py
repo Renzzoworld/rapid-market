@@ -3,19 +3,19 @@ from django.db import connection
 from ...compartido.repositorio_base import one, rows
 
 
-def create_product(name, unit_id, category_id, price, perishable, minimum):
+def create_product(name, unit_id, category_id, price, perishable, minimum, image=""):
     with connection.cursor() as cursor:
-        cursor.execute("INSERT INTO productos (nombre,id_unidad,id_categoria,precio_venta,perecible,stock_minimo,activo) VALUES (%s,%s,%s,%s,%s,%s,true) RETURNING id", [name, unit_id, category_id, price, perishable, minimum])
+        cursor.execute("INSERT INTO productos (nombre,id_unidad,id_categoria,precio_venta,perecible,stock_minimo,activo,imagen) VALUES (%s,%s,%s,%s,%s,%s,true,%s) RETURNING id", [name, unit_id, category_id, price, perishable, minimum, image])
         return cursor.fetchone()[0]
 
 
 def get_product_record(product_id):
-    return one("SELECT id,nombre,id_unidad,id_categoria,precio_venta,perecible,stock_minimo,activo FROM productos WHERE id=%s", [product_id])
+    return one("SELECT id,nombre,id_unidad,id_categoria,precio_venta,perecible,stock_minimo,activo,imagen FROM productos WHERE id=%s", [product_id])
 
 
 def update_product(values):
     with connection.cursor() as cursor:
-        cursor.execute("UPDATE productos SET nombre=%s,id_unidad=%s,id_categoria=%s,precio_venta=%s,perecible=%s,stock_minimo=%s WHERE id=%s", values)
+        cursor.execute("UPDATE productos SET nombre=%s,id_unidad=%s,id_categoria=%s,precio_venta=%s,perecible=%s,stock_minimo=%s,imagen=%s WHERE id=%s", values)
 
 
 def deactivate_product(product_id):
@@ -28,7 +28,7 @@ def get_product(product_id):
     return one("""
         SELECT p.id, p.nombre AS name, p.precio_venta AS price,
                p.perecible AS perishable, p.stock_minimo AS min_stock,
-               p.activo AS active, p.id_categoria AS category_id, cp.nombre AS category, u.id AS unit_id, u.nombre AS unit,
+               p.activo AS active, p.imagen AS image, p.id_categoria AS category_id, cp.nombre AS category, u.id AS unit_id, u.nombre AS unit,
                u.abreviatura AS unit_abbr,
                COALESCE(SUM(CASE
                    WHEN ec.nombre IN ('Recibido', 'Parcialmente entregado')
@@ -77,7 +77,7 @@ def list_product_page(page, search="", category_ids=None):
         WITH product_page AS (
             SELECT p.id, p.nombre AS name, p.precio_venta AS price, p.id_categoria AS category_id, cp.nombre AS category,
                    p.perecible AS perishable, p.stock_minimo AS min_stock,
-                   p.activo AS active, u.id AS unit_id, u.nombre AS unit,
+                   p.activo AS active, p.imagen AS image, u.id AS unit_id, u.nombre AS unit,
                    u.abreviatura AS unit_abbr
             FROM productos p
             JOIN unidades_medida u ON u.id = p.id_unidad
@@ -87,7 +87,7 @@ def list_product_page(page, search="", category_ids=None):
             LIMIT %s OFFSET %s
         )
         SELECT pp.id, pp.name, pp.price, pp.perishable, pp.min_stock, pp.active, pp.category_id, pp.category,
-               pp.unit_id, pp.unit, pp.unit_abbr,
+               pp.unit_id, pp.unit, pp.unit_abbr, pp.image,
                COALESCE(SUM(CASE
                    WHEN ec.nombre IN ('Recibido', 'Parcialmente entregado')
                      AND (l.fecha_vencimiento IS NULL OR l.fecha_vencimiento >= CURRENT_DATE)
@@ -100,7 +100,7 @@ def list_product_page(page, search="", category_ids=None):
         LEFT JOIN estados_compra ec ON ec.id = c.id_estado
         LEFT JOIN lotes l ON l.id_detalle_compra = dc.id
         GROUP BY pp.id, pp.name, pp.price, pp.perishable, pp.min_stock,
-                 pp.active, pp.category_id, pp.category, pp.unit_id, pp.unit, pp.unit_abbr
+                 pp.active, pp.category_id, pp.category, pp.unit_id, pp.unit, pp.unit_abbr, pp.image
         ORDER BY pp.name, pp.id
     """, [search_term] + ([category_ids] if category_ids else []) + [page_size, (page - 1) * page_size])
     return {

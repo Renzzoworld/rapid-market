@@ -185,6 +185,7 @@ class Productos(models.Model):
     stock_minimo = models.DecimalField(max_digits=12, decimal_places=3, default=5,db_default=5)
     activo = models.BooleanField(default=True,db_default=True)
     categoria = models.ForeignKey('CategoriasProductos', models.PROTECT, db_column='id_categoria', related_name='productos')
+    imagen = models.ImageField(upload_to='productos/%Y/%m/', blank=True, default='')
 
     class Meta:
         managed = True

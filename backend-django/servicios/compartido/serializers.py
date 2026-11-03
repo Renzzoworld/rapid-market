@@ -33,6 +33,7 @@ class ProductoSerializer(serializers.Serializer):
     price = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal("0.01"), max_value=Decimal("999999999.99"))
     perishable = serializers.BooleanField(required=False, default=False)
     min_stock = serializers.DecimalField(max_digits=12, decimal_places=3, min_value=Decimal("0"), max_value=Decimal("999999999.999"), required=False, default=5)
+    image = ImagenValidadaField(required=False)
 
 
 class ActualizarProductoSerializer(serializers.Serializer):
@@ -42,6 +43,8 @@ class ActualizarProductoSerializer(serializers.Serializer):
     price = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal("0.01"), max_value=Decimal("999999999.99"), required=False)
     perishable = serializers.BooleanField(required=False)
     min_stock = serializers.DecimalField(max_digits=12, decimal_places=3, min_value=Decimal("0"), max_value=Decimal("999999999.999"), required=False)
+    image = ImagenValidadaField(required=False)
+    remove_image = serializers.BooleanField(required=False, default=False)
 
 
 class ArticuloVentaSerializer(serializers.Serializer):

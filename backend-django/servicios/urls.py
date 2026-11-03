@@ -1,7 +1,7 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views import APIIndexView
-from .modulos.autenticacion.vistas import LoginView, LogoutView
+from .modulos.autenticacion.vistas import LoginView, LogoutView, PasswordResetConfirmView, PasswordResetRequestView
 from .modulos.compras.vistas import PurchaseActionView, PurchaseInvoiceFileView, PurchaseInvoiceView, PurchaseLastPriceView, PurchaseOrderDefaultsView, PurchaseOrderPDFView, PurchasesView
 from .modulos.gastos.vistas import ExpensesView
 from .modulos.inventario.vistas import ProductDetailView, ProductListView
@@ -13,6 +13,8 @@ from .modulos.ventas.vistas import SalesView
 urlpatterns = [
     path('', APIIndexView.as_view(), name='api_root'),
     path('login/', LoginView.as_view(), name='login'),
+    path('password-reset/', PasswordResetRequestView.as_view(), name='password_reset'),
+    path('password-reset/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
     path('logout/', LogoutView.as_view(), name='logout'),
     path('login/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('dashboard/', DashboardView.as_view(), name='dashboard'),

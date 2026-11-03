@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import "./App.css";
+import rapidMarketLogo from "./assets/rapid-market-logo.svg";
 import { ProveedorContexto } from "./compartido/contexto/ProveedorContexto.jsx";
 import { Resumen } from "./modulos/resumen/Resumen.jsx";
 import { InicioSesion } from "./modulos/autenticacion/InicioSesion.jsx";
@@ -90,6 +91,7 @@ function App() {
       usuario={auth.usuario} setUsuario={auth.setUsuario}
       password={auth.password} setPassword={auth.setPassword}
       error={auth.errorLogin}
+      requestPublic={requestPublic}
       onSubmit={(event) => auth.iniciarSesion(event, resumen.cargarDatos, requestPublic)}
     />;
   }
@@ -99,6 +101,7 @@ function App() {
       <div className="app-container">
         <aside className="sidebar">
           <div className="sidebar-logo">
+            <img src={rapidMarketLogo} alt="" className="brand-logo" />
             <h2>Rapid Market</h2>
             <span>Sistema de Gestión</span>
             {auth.rol && <small>Rol: {auth.rol}</small>}

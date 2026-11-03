@@ -17,12 +17,12 @@ export function useInventario({ apiRequest, logueado, seccion, catalogos, esAdmi
   });
   const abrirNuevoProducto = () => {
     setProductoEditando(null);
-    setNuevoProducto({ nombre: "", unidad: "unidad", precio: "", perecible: false, categoriaId: "" });
+    setNuevoProducto({ nombre: "", unidad: "unidad", precio: "", perecible: false, categoriaId: "", imagen: null, quitarImagen: false });
     setMostrarFormulario(true);
   };
   const abrirEditarProducto = (producto) => {
     setProductoEditando(producto);
-    setNuevoProducto({ nombre: producto.nombre, unidad: producto.unidad, precio: producto.precio, perecible: producto.perecible, categoriaId: String(producto.categoriaId) });
+    setNuevoProducto({ nombre: producto.nombre, unidad: producto.unidad, precio: producto.precio, perecible: producto.perecible, categoriaId: String(producto.categoriaId), imagen: null, quitarImagen: false });
     setMostrarFormulario(true);
   };
   const guardarProducto = async (event) => {
@@ -32,10 +32,14 @@ export function useInventario({ apiRequest, logueado, seccion, catalogos, esAdmi
       alert("Completa nombre, unidad, categoría y precio.");
       return;
     }
-    const body = { name: nuevoProducto.nombre.trim(), unit_id: unit.id, category_id: Number(nuevoProducto.categoriaId), price: Number(nuevoProducto.precio), perishable: Boolean(nuevoProducto.perecible), min_stock: Number(productoEditando?.stockMinimo ?? 5) };
+    const campos = { name: nuevoProducto.nombre.trim(), unit_id: unit.id, category_id: Number(nuevoProducto.categoriaId), price: Number(nuevoProducto.precio), perishable: Boolean(nuevoProducto.perecible), min_stock: Number(productoEditando?.stockMinimo ?? 5) };
+    const body = new FormData();
+    Object.entries(campos).forEach(([key, value]) => body.append(key, value));
+    if (nuevoProducto.imagen) body.append("image", nuevoProducto.imagen);
+    if (nuevoProducto.quitarImagen) body.append("remove_image", "true");
     try {
-      await apiRequest(productoEditando ? `/products/${productoEditando.id}/` : "/products/", { method: productoEditando ? "PATCH" : "POST", body: JSON.stringify(body) });
-      setBusqueda(body.name);
+      await apiRequest(productoEditando ? `/products/${productoEditando.id}/` : "/products/", { method: productoEditando ? "PATCH" : "POST", body });
+      setBusqueda(campos.name);
       consulta.setPagina(1);
       setRevision((value) => value + 1);
       setMostrarFormulario(false);

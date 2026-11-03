@@ -83,7 +83,10 @@ export function Inventario() {
                       <tr key={producto.id}>
 
                         <td>
-                          <strong>{producto.nombre}</strong><br /><small>{producto.categoria}</small>
+                          <div className="product-cell">
+                            {producto.imagenUrl ? <img className="product-thumbnail" src={producto.imagenUrl} alt={producto.nombre} /> : <span className="product-placeholder" aria-hidden="true">📦</span>}
+                            <span><strong>{producto.nombre}</strong><br /><small>{producto.categoria}</small></span>
+                          </div>
                         </td>
 
                         <td>
@@ -337,6 +340,15 @@ export function FormularioProducto() {
               </div>
 
               <div className="form-group">
+                <label htmlFor="imagen-producto">Imagen del producto (JPEG, PNG o WebP; máximo 2 MB)</label>
+                <input id="imagen-producto" type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setNuevoProducto({ ...nuevoProducto, imagen: e.target.files?.[0] || null, quitarImagen: false })} />
+                {nuevoProducto.imagen && <img className="product-preview" src={URL.createObjectURL(nuevoProducto.imagen)} alt="Vista previa del producto" />}
+                {!nuevoProducto.imagen && productoEditando?.imagenUrl && !nuevoProducto.quitarImagen && <div className="product-current-image"><img className="product-preview" src={productoEditando.imagenUrl} alt={productoEditando.nombre} /><button type="button" className="login-link" onClick={() => setNuevoProducto({ ...nuevoProducto, quitarImagen: true })}>Quitar imagen actual</button></div>}
+                {nuevoProducto.quitarImagen && <small>La imagen actual se quitará al guardar.</small>}
+                <small>La imagen debe medir entre 300 × 300 y 1200 × 1200 píxeles.</small>
+              </div>
+
+              <div className="form-group">
                 <label>
                   <input
                     type="checkbox"
@@ -406,6 +418,7 @@ export function DetalleProducto() {
               </button>
             </div>
 
+            {productoInventarioSeleccionado.imagenUrl && <img className="product-details-image" src={productoInventarioSeleccionado.imagenUrl} alt={productoInventarioSeleccionado.nombre} />}
             <div className="sale-details-table-container">
               <table className="sale-details-table">
                 <thead>

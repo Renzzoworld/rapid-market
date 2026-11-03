@@ -1,3 +1,7 @@
+import { API_URL } from "./configuracionApi.js";
+
+const urlImagen = (ruta) => ruta ? `${API_URL.replace(/\/api\/?$/, "")}${ruta}` : "";
+
 export const fechaVista = (value) => {
   if (!value) return "";
   const dateOnlyMatch = typeof value === "string" && value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -14,6 +18,7 @@ export const mapearProducto = (product) => ({
   precio: Number(product.price), precioVenta: Number(product.price),
   perecible: product.perishable, activo: product.active,
   stockMinimo: Number(product.min_stock), cantidadLotes: Number(product.lot_count || 0),
+  imagenUrl: urlImagen(product.image),
 });
 
 export const mapearVenta = (sale) => ({
