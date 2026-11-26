@@ -8,7 +8,7 @@ from .modulos.inventario.vistas import ProductDetailView, ProductListView
 from .modulos.proveedores.vistas import CanalProveedorDetailView, CanalesProveedorView, CatalogosProveedorView, ContactoProveedorDetailView, ContactosProveedorView, ProviderDetailView, ProvidersManagementView
 from .modulos.referencias.vistas import ReferenceDataView
 from .modulos.resumen.vistas import DashboardView
-from .modulos.ventas.vistas import SalesView
+from .modulos.ventas.vistas import SaleReceiptPDFView, SalesView
 
 urlpatterns = [
     path('', APIIndexView.as_view(), name='api_root'),
@@ -29,6 +29,8 @@ urlpatterns = [
     path('products/', ProductListView.as_view(), name='products'),
     path('products/<int:product_id>/', ProductDetailView.as_view(), name='product_detail'),
     path('sales/', SalesView.as_view(), name='sales'),
+    path('sales/<int:sale_id>/', SalesView.as_view(), name='sale_detail'),
+    path('sales/<int:sale_id>/receipt/<str:receipt_type>/', SaleReceiptPDFView.as_view(), name='sale_receipt_pdf'),
     path('purchases/last-price/', PurchaseLastPriceView.as_view(), name='purchase_last_price'),
     path('purchases/', PurchasesView.as_view(), name='purchases'),
     path('purchases/order-defaults/', PurchaseOrderDefaultsView.as_view(), name='purchase_order_defaults'),

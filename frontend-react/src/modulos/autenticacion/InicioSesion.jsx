@@ -12,6 +12,7 @@ export function InicioSesion({ usuario, setUsuario, password, setPassword, error
   const [mensaje, setMensaje] = useState("");
   const [errorLocal, setErrorLocal] = useState("");
   const [cargando, setCargando] = useState(false);
+  const [mostrarPassword, setMostrarPassword] = useState(false);
 
   const volverLogin = () => {
     setVista("login"); setMensaje(""); setErrorLocal("");
@@ -50,7 +51,25 @@ export function InicioSesion({ usuario, setUsuario, password, setPassword, error
           <label htmlFor="usuario">Usuario</label>
           <input id="usuario" type="text" autoComplete="username" placeholder="Ingrese su usuario" value={usuario} onChange={(event) => setUsuario(event.target.value)} required />
           <label htmlFor="contrasena">Contraseña</label>
-          <input id="contrasena" type="password" autoComplete="current-password" placeholder="Ingrese su contraseña" value={password} onChange={(event) => setPassword(event.target.value)} required />
+          <div className="login-password-wrap">
+            <input id="contrasena" type={mostrarPassword ? "text" : "password"} autoComplete="current-password" placeholder="Ingrese su contraseña" value={password} onChange={(event) => setPassword(event.target.value)} required />
+            <button
+              type="button"
+              className="password-visibility-button"
+              aria-label={mostrarPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+              aria-pressed={mostrarPassword}
+              title={mostrarPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+              onClick={() => setMostrarPassword((visible) => !visible)}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                {mostrarPassword ? (
+                  <><path d="M3 3l18 18" /><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" /><path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c5 0 8.5 4.5 9.5 6-.4.6-1.3 1.8-2.8 2.9" /><path d="M6.2 6.2C3.9 7.5 2.7 9.2 2.5 11c.8 1.2 4.2 6 9.5 6 1.1 0 2.1-.2 3-.6" /></>
+                ) : (
+                  <><path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z" /><circle cx="12" cy="12" r="2.5" /></>
+                )}
+              </svg>
+            </button>
+          </div>
           {error && <div className="login-error">{error}</div>}
           <button type="submit" className="login-button">Iniciar sesión</button>
           <button type="button" className="login-link" onClick={() => { setVista("solicitar"); setErrorLocal(""); }}>¿Olvidaste tu contraseña?</button>

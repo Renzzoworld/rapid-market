@@ -42,7 +42,7 @@ def consume_lot(detail_id, lot_id, amount):
         cursor.execute("INSERT INTO detalle_venta_lotes (id_detalle_venta,id_lote,cantidad) VALUES (%s,%s,%s)", [detail_id, lot_id, amount])
 
 
-def list_sales(user_id=None, include_costs=True, *, page=None, search="", sale_id=None):
+def list_sales(user_id=None, include_costs=True, *, page=None, search="", sale_id=None, period="all", include_cancelled=True):
     conditions = []
     params = []
     if user_id is not None:
@@ -51,6 +51,12 @@ def list_sales(user_id=None, include_costs=True, *, page=None, search="", sale_i
     if sale_id is not None:
         conditions.append("v.id = %s")
         params.append(sale_id)
+    if not include_cancelled:
+        conditions.append("v.anulada = false")
+    if period == "today":
+        conditions.append("v.fecha::date = CURRENT_DATE")
+    elif period == "week":
+        conditions.append("v.fecha::date >= CURRENT_DATE - INTERVAL '6 days'")
     if search:
         search_term = f"%{search}%"
         conditions.append("""(
@@ -80,7 +86,7 @@ def list_sales(user_id=None, include_costs=True, *, page=None, search="", sale_i
     """ if include_costs else ""
     sales = rows("""
         SELECT v.id, v.fecha, tv.nombre AS type, tv.descuento_porcentaje AS discount,
-               mp.nombre AS payment,
+               mp.nombre AS payment, v.anulada AS cancelled,
                COALESCE(SUM(dv.cantidad * dv.precio_unitario), 0) AS total,
                COALESCE(SUM(dv.cantidad), 0) AS quantity
                {cost_fields}
@@ -111,12 +117,16 @@ def get_sale(sale_id, user_id=None, include_costs=True):
     return sales[0] if sales else None
 
 
-def list_sales_page(user_id=None, include_costs=True, page=1, search=""):
+def list_sales_page(user_id=None, include_costs=True, page=1, search="", period="all"):
     conditions = []
     params = []
     if user_id is not None:
         conditions.append("v.id_usuario = %s")
         params.append(user_id)
+    if period == "today":
+        conditions.append("v.fecha::date = CURRENT_DATE")
+    elif period == "week":
+        conditions.append("v.fecha::date >= CURRENT_DATE - INTERVAL '6 days'")
     if search:
         search_term = f"%{search}%"
         conditions.append("""(
@@ -137,5 +147,5 @@ def list_sales_page(user_id=None, include_costs=True, page=1, search=""):
         {where_clause}
     """, params)["total"]
     page = min(page, max((count + PAGE_SIZE - 1) // PAGE_SIZE, 1))
-    sales = list_sales(user_id, include_costs, page=page, search=search)
+    sales = list_sales(user_id, include_costs, page=page, search=search, period=period)
     return {"results": sales, "count": count, "page": page, "page_size": PAGE_SIZE}

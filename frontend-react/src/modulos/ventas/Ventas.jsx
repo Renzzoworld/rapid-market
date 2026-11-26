@@ -4,7 +4,7 @@ import SugerenciasProductos from "../../compartido/componentes/SugerenciasProduc
 
 export function Ventas() {
   const { estadoVentas } = useContextoAplicacion();
-  const { busquedaVentas, cargandoVentas, errorVentas, obtenerCodigoVenta, obtenerProductosVenta, paginaVentas, resumenDashboard, seccion, setBusquedaProductoVenta, setBusquedaVentas, setCarritoVenta, setMostrarVenta, setNuevaVenta, setPaginaProductosVenta, setPaginaVentas, setProductosVentaOpciones, setVentaSeleccionada, totalVentas, totalVentasRegistros, ventasFiltradas } = estadoVentas;
+  const { busquedaVentas, cargandoVentas, errorVentas, obtenerCodigoVenta, obtenerProductosVenta, paginaVentas, periodoVentas, resumenDashboard, seccion, setBusquedaProductoVenta, setBusquedaVentas, setPeriodoVentas, setCarritoVenta, setMostrarVenta, setNuevaVenta, setPaginaProductosVenta, setPaginaVentas, setProductosVentaOpciones, setVentaSeleccionada, totalVentas, totalVentasRegistros, ventasFiltradas } = estadoVentas;
 
   return (
     <>
@@ -57,6 +57,14 @@ export function Ventas() {
               <h3>Historial de ventas</h3>
 
               <div className="history-toolbar">
+                <label className="sales-period-select">
+                  <span>Periodo</span>
+                  <select aria-label="Filtrar ventas por periodo" value={periodoVentas} onChange={(event) => setPeriodoVentas(event.target.value)}>
+                    <option value="all">Todas las ventas</option>
+                    <option value="today">Ventas de hoy</option>
+                    <option value="week">Últimos 7 días</option>
+                  </select>
+                </label>
                 <input
                   type="text"
                   placeholder="Buscar por código, producto, fecha o pago..."
@@ -79,6 +87,7 @@ export function Ventas() {
                       <th>Cantidad de productos</th>
                       <th>Tipo de pago</th>
                       <th>Total</th>
+                      <th>Estado</th>
                       <th>Detalles</th>
                     </tr>
                   </thead>
@@ -96,15 +105,8 @@ export function Ventas() {
                         <td>
                           <strong>S/ {venta.total.toFixed(2)}</strong>
                         </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="details-button"
-                            onClick={() => setVentaSeleccionada(venta)}
-                          >
-                            <span aria-hidden="true">👁</span> Detalles
-                          </button>
-                        </td>
+                        <td><span className={`status-badge ${venta.anulada ? "out-of-stock" : "available"}`}>{venta.anulada ? "Anulada" : "Vigente"}</span></td>
+                        <td><button type="button" className="details-button" onClick={() => setVentaSeleccionada(venta)}>👁 Detalles</button></td>
                       </tr>
                     ))}
 
@@ -122,7 +124,7 @@ export function Ventas() {
 
               </div>
 
-              <Paginacion pagina={paginaVentas} cantidad={totalVentasRegistros} cargando={cargandoVentas} alCambiar={setPaginaVentas} />
+              <Paginacion pagina={paginaVentas} cantidad={totalVentasRegistros} cargando={cargandoVentas} alCambiar={setPaginaVentas} mostrarRango etiqueta="ventas" />
 
             </div>
           </>
@@ -132,8 +134,9 @@ export function Ventas() {
 }
 
 export function ModalesVenta() {
-  const { estadoVentas } = useContextoAplicacion();
-  const { agregarProductoVenta, busquedaProductoVenta, cambiarCantidadProductoVenta, cargandoProductosVenta, carritoVenta, factorPrecioVenta, mostrarVenta, nuevaVenta, obtenerCodigoVenta, obtenerProductosVenta, paginaProductosVenta, productoSeleccionadoVenta, productosVentaFiltrados, registrarVenta, setBusquedaProductoVenta, setCarritoVenta, setMostrarVenta, setNuevaVenta, setPaginaProductosVenta, setProductosVentaOpciones, setTotalProductosVentaOpciones, setVentaSeleccionada, totalCarritoVenta, totalProductosVentaOpciones, ventaSeleccionada } = estadoVentas;
+  const { estadoVentas, estadoResumen } = useContextoAplicacion();
+  const { catalogos } = estadoResumen;
+  const { agregarProductoVenta, anularVenta, descargarComprobante, editarVenta, busquedaProductoVenta, cambiarCantidadProductoVenta, cargandoProductosVenta, carritoVenta, factorPrecioVenta, mostrarVenta, nuevaVenta, obtenerCodigoVenta, obtenerProductosVenta, paginaProductosVenta, productoSeleccionadoVenta, productosVentaFiltrados, registrarVenta, setBusquedaProductoVenta, setCarritoVenta, setMostrarVenta, setNuevaVenta, setPaginaProductosVenta, setProductosVentaOpciones, setTotalProductosVentaOpciones, setVentaSeleccionada, totalCarritoVenta, totalProductosVentaOpciones, ventaSeleccionada } = estadoVentas;
 
   return (
     <>
@@ -167,8 +170,8 @@ export function ModalesVenta() {
 
             <form onSubmit={registrarVenta}>
 
+              <div className="form-step-title">1. Selecciona productos</div>
               <div className="form-group">
-
                 <label>Producto</label>
 
                 <div className="product-autocomplete">
@@ -254,8 +257,9 @@ export function ModalesVenta() {
 
               </div>
 
+              <div className="form-step-title">2. Tipo de venta y pago</div>
+              <div className="sale-options-grid">
               <div className="form-group">
-
                 <label>Tipo de venta</label>
 
                 <select
@@ -302,8 +306,9 @@ export function ModalesVenta() {
 
               </div>
 
+              </div>
+              <div className="form-step-title">3. Revisa los productos</div>
               <div className="form-group sale-products-group">
-
                 <label>Productos agregados</label>
 
                 {carritoVenta.length > 0 ? (
@@ -440,6 +445,16 @@ export function ModalesVenta() {
               </button>
             </div>
 
+            {!ventaSeleccionada.anulada && <div className="sale-edit-row">
+              <label>Tipo <select id="edit-sale-type" defaultValue={ventaSeleccionada.tipo}>{(catalogos.sale_types || []).map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}</select></label>
+              <label>Pago <select id="edit-sale-payment" defaultValue={ventaSeleccionada.pago}>{(catalogos.payment_methods || []).map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}</select></label>
+              <button type="button" className="secondary-button" onClick={() => editarVenta(ventaSeleccionada, document.getElementById("edit-sale-type").value, document.getElementById("edit-sale-payment").value)}>Guardar edición</button>
+              <button type="button" className="action-button delete" onClick={() => anularVenta(ventaSeleccionada)}>Anular venta</button>
+            </div>}
+            <div className="sale-pdf-actions">
+              <button type="button" className="secondary-button" onClick={() => descargarComprobante(ventaSeleccionada, "boleta")}>Descargar boleta PDF</button>
+              <button type="button" className="secondary-button" onClick={() => descargarComprobante(ventaSeleccionada, "factura")}>Descargar factura PDF</button>
+            </div>
             <div className="sale-details-table-container">
               <table className="sale-details-table">
                 <thead>

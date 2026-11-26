@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-export function useConsultaPaginada({ apiRequest, ruta, habilitada, busqueda, revision = 0, mapear, categoryIds = [] }) {
+export function useConsultaPaginada({ apiRequest, ruta, habilitada, busqueda, revision = 0, mapear, categoryIds = [], extraQuery = {} }) {
   const [registros, setRegistros] = useState([]);
   const [total, setTotal] = useState(0);
   const [pagina, setPagina] = useState(1);
@@ -12,6 +12,7 @@ export function useConsultaPaginada({ apiRequest, ruta, habilitada, busqueda, re
     let vigente = true;
     const query = new URLSearchParams({ page: String(pagina), search: busqueda.trim() });
     if (categoryIds.length) query.set("category_ids", categoryIds.join(","));
+    Object.entries(extraQuery).forEach(([key, value]) => { if (value) query.set(key, value); });
     const timer = setTimeout(() => {
       setCargando(true);
       setError("");
@@ -26,7 +27,7 @@ export function useConsultaPaginada({ apiRequest, ruta, habilitada, busqueda, re
         .finally(() => { if (vigente) setCargando(false); });
     }, 0);
     return () => { vigente = false; clearTimeout(timer); };
-  }, [apiRequest, busqueda, habilitada, mapear, pagina, revision, ruta, categoryIds.join(",")]);
+  }, [apiRequest, busqueda, habilitada, mapear, pagina, revision, ruta, categoryIds.join(","), JSON.stringify(extraQuery)]);
 
   return { registros, total, pagina, setPagina, cargando, error };
 }

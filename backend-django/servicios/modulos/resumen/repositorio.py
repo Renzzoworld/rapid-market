@@ -54,16 +54,16 @@ def dashboard_summary(user_id=None, include_financials=True):
             SELECT v.id,
                    COALESCE(SUM(dv.cantidad * dv.precio_unitario), 0) AS sale_total
             FROM ventas v LEFT JOIN detalle_ventas dv ON dv.id_venta = v.id
-            {sales_filter}
+            {sales_filter} {"AND" if sales_filter else "WHERE"} v.anulada = false
             GROUP BY v.id
         ) sale_totals
     """, sales_params)
-    recent_sales = list_sales(user_id, include_costs=include_financials, page=1)[:5]
+    recent_sales = list_sales(user_id, include_costs=include_financials, page=1, include_cancelled=False)[:5]
     sales_by_day = rows(f"""
         SELECT DATE(v.fecha) AS day,
                COALESCE(SUM(dv.cantidad * dv.precio_unitario), 0) AS total
         FROM ventas v LEFT JOIN detalle_ventas dv ON dv.id_venta = v.id
-        {sales_filter}
+        {sales_filter} {"AND" if sales_filter else "WHERE"} v.anulada = false
         GROUP BY DATE(v.fecha)
         ORDER BY day DESC LIMIT 5
     """, sales_params)
@@ -83,11 +83,12 @@ def dashboard_summary(user_id=None, include_financials=True):
             JOIN detalle_venta_lotes dvl ON dvl.id_detalle_venta = dv.id
             JOIN lotes l ON l.id = dvl.id_lote
             JOIN detalle_compras dc ON dc.id = l.id_detalle_compra
+            WHERE v.anulada = false
         """)
         missing_costs = one("""
             SELECT COUNT(DISTINCT v.id) AS total
             FROM ventas v JOIN detalle_ventas dv ON dv.id_venta = v.id
-            WHERE (SELECT COALESCE(SUM(dvl.cantidad), 0)
+            WHERE v.anulada = false AND (SELECT COALESCE(SUM(dvl.cantidad), 0)
                    FROM detalle_venta_lotes dvl
                    WHERE dvl.id_detalle_venta = dv.id) < dv.cantidad
         """)

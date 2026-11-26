@@ -52,12 +52,10 @@ export function Inventario() {
                   }}
                 />
 
-                <div className="inventory-category-filters" role="group" aria-label="Filtrar productos por categoría">
-                  <button type="button" className={!categoriaSeleccionada ? "active" : ""} aria-pressed={!categoriaSeleccionada} onClick={() => setCategoriaSeleccionada("")}>Todas</button>
-                  {categoriasProducto.map((categoria) => (
-                    <button key={categoria.id} type="button" className={String(categoria.id) === categoriaSeleccionada ? "active" : ""} aria-pressed={String(categoria.id) === categoriaSeleccionada} onClick={() => setCategoriaSeleccionada(String(categoria.id))}>{categoria.name || categoria.nombre}</button>
-                  ))}
-                </div>
+                <select aria-label="Filtrar productos por categoría" value={categoriaSeleccionada} onChange={(e) => setCategoriaSeleccionada(e.target.value)}>
+                  <option value="">Todas las categorías</option>
+                  {categoriasProducto.map((categoria) => <option key={categoria.id} value={String(categoria.id)}>{categoria.name || categoria.nombre}</option>)}
+                </select>
 
               </div>
 
@@ -179,12 +177,13 @@ export function Inventario() {
 
               </div>
 
-              {totalPaginasInventario > 1 && (
-                <nav className="inventory-pagination" aria-label="Paginación del inventario">
+              <nav className="inventory-pagination" aria-label="Paginación del inventario" aria-live="polite">
                   <span>
-                    Página {paginaInventario} de {totalPaginasInventario}
+                    {totalProductosInventario === 0
+                      ? "0 productos"
+                      : `Mostrando ${(paginaInventario - 1) * 10 + 1}–${Math.min(paginaInventario * 10, totalProductosInventario)} de ${totalProductosInventario} productos · Página ${paginaInventario} de ${Math.max(totalPaginasInventario, 1)}`}
                   </span>
-                  <div className="inventory-page-buttons">
+                  {totalPaginasInventario > 1 && <div className="inventory-page-buttons">
                     <button
                       type="button"
                       disabled={paginaInventario === 1 || cargandoInventario}
@@ -211,9 +210,8 @@ export function Inventario() {
                     >
                       Siguiente
                     </button>
-                  </div>
+                  </div>}
                 </nav>
-              )}
 
             </div>
           </>

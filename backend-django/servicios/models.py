@@ -402,6 +402,9 @@ class Ventas(models.Model):
     id_usuario = models.ForeignKey(settings.AUTH_USER_MODEL, models.DO_NOTHING, db_column='id_usuario')
     id_tipo_venta = models.ForeignKey(TiposVenta, models.DO_NOTHING, db_column='id_tipo_venta')
     id_metodo_pago = models.ForeignKey(MetodosPago, models.DO_NOTHING, db_column='id_metodo_pago')
+    anulada = models.BooleanField(default=False)
+    anulada_en = models.DateTimeField(blank=True, null=True)
+    anulada_por = models.ForeignKey(settings.AUTH_USER_MODEL, models.SET_NULL, db_column='anulada_por', blank=True, null=True, related_name='ventas_anuladas')
 
     class Meta:
         managed = True

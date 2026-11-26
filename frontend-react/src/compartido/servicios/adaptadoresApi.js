@@ -23,7 +23,7 @@ export const mapearProducto = (product) => ({
 
 export const mapearVenta = (sale) => ({
   idVenta: sale.id, fecha: fechaVista(sale.fecha), tipo: sale.type,
-  pago: sale.payment, total: Number(sale.total), cantidad: Number(sale.quantity),
+  pago: sale.payment, anulada: Boolean(sale.cancelled), total: Number(sale.total), cantidad: Number(sale.quantity),
   costoVendido: Number(sale.cost_of_goods_sold || 0), costoCompleto: sale.cost_data_complete,
   productos: sale.items.map((item) => ({
     id: item.product_id, nombre: item.name, cantidad: Number(item.quantity), precio: Number(item.price),

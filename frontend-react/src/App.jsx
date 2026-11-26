@@ -38,7 +38,7 @@ function App() {
     esAdministrador, resumenDashboard: resumen.resumenDashboard,
   });
   const ventas = useVentas({
-    apiRequest, logueado: auth.logueado, seccion, revisionProductos: inventario.revision,
+    apiRequest, apiDownload, logueado: auth.logueado, seccion, revisionProductos: inventario.revision,
     invalidarInventario: inventario.invalidar, cargarDatos: resumen.cargarDatos,
     accessToken: auth.accessToken, catalogos: resumen.catalogos,
     resumenDashboard: resumen.resumenDashboard, totalVentas: resumen.totalVentas,
