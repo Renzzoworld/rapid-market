@@ -4,10 +4,10 @@ import { useContextoAplicacion } from "../../compartido/contexto/useContextoApli
 
 const logoDefault = "/proveedor-sin-logo.svg";
 
-function Modal({ title, onClose, children }) {
+function Modal({ title, onClose, children, wide = false }) {
   return (
     <div className="modal-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section className="modal-card proveedor-dialogo" role="dialog" aria-modal="true">
+      <section className={`modal-card proveedor-dialogo ${wide ? "proveedor-dialogo-ancho" : ""}`} role="dialog" aria-modal="true">
         <div className="modal-header">
           <h2>{title}</h2>
           <button type="button" className="modal-close" onClick={onClose} aria-label="Cerrar">×</button>
@@ -100,6 +100,7 @@ function EditorHorario({ horarios, onChange, diasSemana }) {
 }
 
 export function Proveedores() {
+  const [panelProveedor, setPanelProveedor] = useState("detalles");
   const { estadoProveedores: p } = useContextoAplicacion();
   const {
     busqueda, cargando, error, esAdministrador, pagina, registros, seleccionado, total,
@@ -143,25 +144,36 @@ export function Proveedores() {
       <header className="page-header"><div><h1>Proveedores</h1><p>Administra proveedores y sus contactos</p></div><button className="primary-button" onClick={abrirNuevoProveedor}>+ Nuevo proveedor</button></header>
       <div className="history-toolbar"><input type="search" value={busqueda} placeholder="Buscar proveedor..." onChange={(event) => { setBusqueda(event.target.value); setPagina(1); }} /></div>
       {cargando && <p role="status">Cargando proveedores...</p>}{error && <p role="alert">{error}</p>}{!cargando && !error && !registros.length && <p className="empty-state">No hay proveedores registrados.</p>}
-      <div className="proveedores-grid">{registros.map((proveedor) => <button className="proveedor-card content-card" key={proveedor.id} onClick={() => abrirProveedor(proveedor)}><img src={proveedor.logo || logoDefault} alt="" /><strong>{proveedor.nombre}</strong><span>{proveedor.razon_social}</span><span className={`provider-badge ${proveedor.activo ? "active" : "inactive"}`}>{proveedor.activo ? "Activo" : "Inactivo"}</span></button>)}</div>
-      <Paginacion pagina={pagina} cantidad={total} cargando={cargando} alCambiar={setPagina} tamanoPagina={9} />
+      <div className="table-container module-list-table providers-table-container"><table className="providers-table">
+        <thead><tr><th>ID</th><th>Logo</th><th>RUC</th><th>Nombre comercial</th><th>Categorías</th><th>Detalles</th><th>Contactos</th><th>Acciones</th></tr></thead>
+        <tbody>{registros.map((proveedor) => <tr key={proveedor.id}>
+          <td>{proveedor.id}</td><td><img className="provider-table-logo" src={proveedor.logo || logoDefault} alt={`Logo de ${proveedor.nombre}`} /></td><td>{proveedor.ruc}</td><td><strong>{proveedor.nombre}</strong><div className={`provider-badge ${proveedor.activo ? "active" : "inactive"}`}>{proveedor.activo ? "Activo" : "Inactivo"}</div></td>
+          <td><div className="provider-cell-lines">{proveedor.categorias.map((item) => <span key={item.id}>{item.nombre}</span>)}</div></td>
+          <td><button className="details-button" onClick={() => { setPanelProveedor("detalles"); abrirProveedor(proveedor); }}>Detalles</button></td>
+          <td><button className="details-button" onClick={() => { setPanelProveedor("contactos"); abrirProveedor(proveedor); }}>Ver</button></td>
+          <td><div className="provider-table-actions"><button className="secondary-button" onClick={() => editarProveedor(proveedor)}>Editar</button><button className="provider-state-action" onClick={() => cambiarEstadoProveedor(proveedor)}>{proveedor.activo ? "Desactivar" : "Activar"}</button><button className="danger-button" onClick={() => solicitarEliminacion("proveedor", proveedor)}>Eliminar</button></div></td>
+        </tr>)}</tbody>
+      </table></div>
+      <Paginacion pagina={pagina} cantidad={total} cargando={cargando} alCambiar={setPagina} tamanoPagina={10} mostrarRango etiqueta="proveedores" />
     </section>}
 
-    {p.seccion === "proveedores" && seleccionado && <Modal title={seleccionado.nombre} onClose={() => p.setSeleccionado(null)}>{cargandoDetalle ? <p>Cargando...</p> : <>
-      <section className="provider-detail-block"><h3>Datos generales</h3><div className="proveedor-resumen"><img src={seleccionado.logo || logoDefault} alt="" /><div>
-        <p><b>Razón social:</b> {seleccionado.razon_social}</p><p><b>RUC:</b> {seleccionado.ruc}</p><p><b>Dirección fiscal:</b> {seleccionado.direccion}</p>
-        <p><b>Categorías:</b> {seleccionado.categorias.map((item) => item.nombre).join(", ")}</p>
-        <p><b>Correos:</b> {seleccionado.datos_contacto.filter((item) => item.tipo === "correo").map((item) => item.valor).join(", ") || "—"}</p>
-        <p><b>Teléfonos:</b> {seleccionado.datos_contacto.filter((item) => item.tipo === "telefono").map((item) => item.valor).join(", ") || "—"}</p>
-        <b>Horario de atención</b><DetalleHorario horarios={seleccionado.horarios} diasSemana={diasSemana} />
-      </div></div></section>
-      <div className="provider-actions provider-actions-centered"><button className="provider-edit-action" onClick={editarProveedor}>Editar datos generales</button><button className="provider-state-action" onClick={cambiarEstadoProveedor}>{seleccionado.activo ? "Desactivar" : "Activar"}</button><button className="danger-button" onClick={() => solicitarEliminacion("proveedor", seleccionado)}>Eliminar</button></div>
-      <section className="provider-related-section provider-detail-block"><header><h3>Contactos ({seleccionado.contactos.length})</h3><button className="details-button" onClick={() => abrirFormularioContacto()}>+ Agregar contacto</button></header>
-        {seleccionado.contactos.map((contacto) => <article className="provider-related-card" key={contacto.id}><div><b>{contacto.nombre}</b><span>{contacto.cargo_nombre === "Otros" ? contacto.cargo_otro : contacto.cargo_nombre}</span></div><div className="provider-inline-actions"><button className="details-button" onClick={() => setContactoDetalle(contactoDetalle?.id === contacto.id ? null : contacto)}>{contactoDetalle?.id === contacto.id ? "Ocultar" : "Detalles"}</button><button className="secondary-button" onClick={() => abrirFormularioContacto(contacto)}>Editar</button><button className="action-button delete" onClick={() => solicitarEliminacion("contacto", contacto)}>Eliminar</button></div>
-          {contactoDetalle?.id === contacto.id && <div className="related-detail"><p><b>Dirección:</b> {contacto.direccion}</p><p><b>Medios de contacto:</b></p>{contacto.datos_contacto.map((item) => <p key={item.id}>{item.tipo}: {item.valor}</p>)}<b>Horario</b><DetalleHorario horarios={contacto.horarios} diasSemana={diasSemana} /></div>}
-        </article>)}
-      </section>
-    </>}</Modal>}
+    {p.seccion === "proveedores" && seleccionado && <Modal wide title={`${seleccionado.nombre} · ${panelProveedor === "contactos" ? "Contactos" : "Detalles"}`} onClose={() => p.setSeleccionado(null)}>{cargandoDetalle ? <p>Cargando...</p> : panelProveedor === "detalles" ? <>
+      <section className="provider-detail-block"><h3>Datos generales</h3><div className="table-container provider-inner-table"><table><thead><tr><th>RUC</th><th>Razón social</th><th>Dirección</th><th>Correos</th><th>Teléfonos</th><th>Horarios</th></tr></thead><tbody><tr>
+        <td>{seleccionado.ruc}</td><td>{seleccionado.razon_social}</td><td>{seleccionado.direccion}</td>
+        <td><div className="provider-cell-lines">{seleccionado.datos_contacto.filter((item) => item.tipo === "correo").map((item) => <span key={item.id || item.valor}>{item.valor}</span>)}</div></td>
+        <td><div className="provider-cell-lines">{seleccionado.datos_contacto.filter((item) => item.tipo === "telefono").map((item) => <span key={item.id || item.valor}>{item.valor}</span>)}</div></td>
+        <td><div className="provider-cell-lines">{gruposHorario(seleccionado.horarios).map(({ key, days }) => { const [start, end] = key.split("-"); return <span key={key}>{diasComoRangos(days, diasSemana)}: {start}–{end}</span>; })}</div></td>
+      </tr></tbody></table></div></section>
+    </> : <section className="provider-related-section provider-detail-block"><header><h3>Contactos ({seleccionado.contactos.length})</h3><button className="details-button" onClick={() => abrirFormularioContacto()}>+ Agregar contacto</button></header>
+      <div className="table-container provider-inner-table"><table><thead><tr><th>ID</th><th>Nombre</th><th>Cargo</th><th>Dirección</th><th>Medios de contacto</th><th>Horario</th><th>Acciones</th></tr></thead><tbody>
+        {seleccionado.contactos.map((contacto) => <tr key={contacto.id}><td>{contacto.id}</td><td>{contacto.nombre}</td><td>{contacto.cargo_nombre === "Otros" ? contacto.cargo_otro : contacto.cargo_nombre}</td><td>{contacto.direccion}</td>
+          <td><div className="provider-cell-lines">{contacto.datos_contacto.map((item) => <span key={item.id || `${item.tipo}-${item.valor}`}>{item.tipo}: {item.valor}</span>)}</div></td>
+          <td><div className="provider-cell-lines">{gruposHorario(contacto.horarios).map(({ key, days }) => { const [start, end] = key.split("-"); return <span key={key}>{diasComoRangos(days, diasSemana)}: {start}–{end}</span>; })}</div></td>
+          <td><div className="provider-table-actions"><button className="secondary-button" onClick={() => abrirFormularioContacto(contacto)}>Editar</button><button className="danger-button" onClick={() => solicitarEliminacion("contacto", contacto)}>Eliminar</button></div></td>
+        </tr>)}
+        {!seleccionado.contactos.length && <tr><td colSpan="7" className="empty-state">No hay contactos registrados.</td></tr>}
+      </tbody></table></div>
+    </section>}</Modal>}
 
     {p.seccion === "proveedores" && mostrarFormulario && <Modal title={`${proveedorEditando ? "Editar" : "Nuevo"} proveedor · Paso ${pasoFormulario} de 2`} onClose={solicitarCancelarProveedor}>
       <form onSubmit={guardarProveedor}>
