@@ -36,6 +36,8 @@ function App() {
   const inventario = useInventario({
     apiRequest, logueado: auth.logueado, seccion, catalogos: resumen.catalogos,
     esAdministrador, resumenDashboard: resumen.resumenDashboard,
+    cargarDatos: resumen.cargarDatos,
+    accessToken: auth.accessToken,
   });
   const ventas = useVentas({
     apiRequest, apiDownload, logueado: auth.logueado, seccion, revisionProductos: inventario.revision,

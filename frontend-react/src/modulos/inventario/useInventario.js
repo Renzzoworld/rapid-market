@@ -2,7 +2,7 @@ import { useState } from "react";
 import { fechaVista, mapearProducto } from "../../compartido/servicios/adaptadoresApi.js";
 import { useConsultaPaginada } from "../../compartido/hooks/useConsultaPaginada.js";
 
-export function useInventario({ apiRequest, logueado, seccion, catalogos, esAdministrador, resumenDashboard }) {
+export function useInventario({ apiRequest, logueado, seccion, catalogos, esAdministrador, resumenDashboard,cargarDatos,accessToken }) {
   const [busqueda, setBusqueda] = useState("");
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState("");
   const [revision, setRevision] = useState(0);
@@ -42,6 +42,8 @@ export function useInventario({ apiRequest, logueado, seccion, catalogos, esAdmi
       setBusqueda(campos.name);
       consulta.setPagina(1);
       setRevision((value) => value + 1);
+      setRevision((value) => value + 1);
+      await cargarDatos(accessToken);
       setMostrarFormulario(false);
       setProductoEditando(null);
     } catch (error) { alert(error.message); }
@@ -52,6 +54,9 @@ export function useInventario({ apiRequest, logueado, seccion, catalogos, esAdmi
     try {
       await apiRequest(`/products/${id}/`, { method: "DELETE" });
       setRevision((value) => value + 1);
+      await apiRequest(`/products/${id}/`, { method: "DELETE" });
+      setRevision((value) => value + 1);
+      await cargarDatos(accessToken);
     } catch (error) { alert(error.message); }
   };
   const verDetallesProducto = async (producto) => {
